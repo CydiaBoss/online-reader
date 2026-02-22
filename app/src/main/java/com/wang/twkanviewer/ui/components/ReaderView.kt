@@ -26,7 +26,8 @@ import com.wang.twkanviewer.R
 fun ReaderView(
     url: String,
     onScrap: () -> Unit,
-    onSave: () -> Unit
+    onSave: () -> Unit,
+    onWebViewCreated: (WebView) -> Unit
 ) {
     Column {
         TopAppBar(
@@ -61,6 +62,7 @@ fun ReaderView(
                 CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
 
                 loadUrl(url)
+                onWebViewCreated(this)
             }
         }, update = {
             CookieManager.getInstance().setAcceptThirdPartyCookies(it, true)
