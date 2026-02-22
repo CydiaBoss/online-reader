@@ -41,14 +41,6 @@ fun ReaderView(
                 }
             }
         )
-        Row(modifier = Modifier.fillMaxWidth()) {
-            TextField(
-                value = url,
-                onValueChange = onUrlChange,
-                label = { Text(text = stringResource(id = R.string.url_textfield_label)) },
-                modifier = Modifier.weight(1f)
-            )
-        }
         AndroidView(factory = {
             WebView(it).apply {
                 layoutParams = ViewGroup.LayoutParams(
