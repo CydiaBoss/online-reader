@@ -18,41 +18,26 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import com.wang.twkanviewer.ui.components.ReaderView
-import com.wang.twkanviewer.ui.theme.TwkanviewerTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
             var url by remember { mutableStateOf("https://twkan.com/") }
-            TwkanviewerTheme {
-                // A surface container using the 'background' color from the theme
-                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    Column {
-                        TextField(value = url, onValueChange = { url = it })
-                        Button(onClick = { /*TODO*/ }) {
-                            Text("Scrap")
-                        }
-                        ReaderView(url = url)
+            // A surface container using the 'background' color from the theme
+            Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                Column {
+                    TextField(value = url, onValueChange = { url = it })
+                    Button(onClick = { /*TODO*/ }) {
+                        Text("Scrap")
                     }
+                    ReaderView(url = url)
                 }
             }
         }
     }
 }
 
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
-
 @Preview(showBackground = true)
 @Composable
-fun GreetingPreview() {
-    TwkanviewerTheme {
-        Greeting("Android")
-    }
-}
+fun GreetingPreview() {}
