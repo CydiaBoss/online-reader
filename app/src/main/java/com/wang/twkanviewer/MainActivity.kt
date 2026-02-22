@@ -1,57 +1,58 @@
 package com.wang.twkanviewer
 
-import android.graphics.BitmapFactory
 import android.os.Bundle
-import android.util.Log
-import android.view.inputmethod.EditorInfo
-import android.view.inputmethod.InputMethodManager
-import android.widget.EditText
-import android.widget.TextView
 import androidx.activity.ComponentActivity
-import androidx.browser.customtabs.CustomTabsIntent
-import androidx.core.net.toUri
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.tooling.preview.Preview
+import com.wang.twkanviewer.ui.components.ReaderView
+import com.wang.twkanviewer.ui.theme.TwkanviewerTheme
 
-private const val TAG = "MainActivity"
 class MainActivity : ComponentActivity() {
-    private lateinit var urlField: EditText
-    private lateinit var chapterView: TextView
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
-
-        // System Service
-        val inputMethodManager : InputMethodManager = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
-
-        // Custom Tabs as Reader
-        var intentTab = CustomTabsIntent.Builder()
-            .setStartAnimations(this, android.R.anim.slide_in_left, android.R.anim.slide_out_right)
-            .setExitAnimations(this, android.R.anim.slide_in_left, android.R.anim.slide_out_right)
-            .setUrlBarHidingEnabled(true)
-            .setShowTitle(true)
-            .build()
-
-        // Load Views
-        urlField = findViewById<EditText>(R.id.urlField)
-        chapterView = findViewById<TextView>(R.id.chapterView)
-
-        // Listener
-        urlField.setOnEditorActionListener { view, actionId, _ ->
-            if (actionId == EditorInfo.IME_ACTION_DONE) {
-                // Hide the keyboard
-                inputMethodManager.hideSoftInputFromWindow(view.windowToken, 0)
-                Log.d(TAG, "Closed Keyboard")
-
-                // Load Story from URL
-                chapterView.text = R.string.loading.toString()
-                Log.d(TAG, "Loading " + view.text.toString())
-
-                // Launch Web Intent
-                intentTab.launchUrl(this, view.text.toString().toUri())
-
-                true
+        setContent {
+            var url by remember { mutableStateOf("https://twkan.com/") }
+            TwkanviewerTheme {
+                // A surface container using the 'background' color from the theme
+                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                    Column {
+                        TextField(value = url, onValueChange = { url = it })
+                        Button(onClick = { /*TODO*/ }) {
+                            Text("Scrap")
+                        }
+                        ReaderView(url = url)
+                    }
+                }
             }
-            false
         }
+    }
+}
+
+@Composable
+fun Greeting(name: String, modifier: Modifier = Modifier) {
+    Text(
+        text = "Hello $name!",
+        modifier = modifier
+    )
+}
+
+@Preview(showBackground = true)
+@Composable
+fun GreetingPreview() {
+    TwkanviewerTheme {
+        Greeting("Android")
     }
 }

@@ -43,8 +43,8 @@ android {
         resources.excludes += "mozilla/public-suffix-list.txt"
         // You might need to exclude other META-INF files as well,
         // depending on the specific error message, e.g.,
-        // exclude 'META-INF/LICENSE'
-        // exclude 'META-INF/NOTICE'
+        // exclude '''META-INF/LICENSE'''
+        // exclude '''META-INF/NOTICE'''
     }
 }
 
