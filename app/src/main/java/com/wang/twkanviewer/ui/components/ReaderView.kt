@@ -26,7 +26,6 @@ fun ReaderView(url: String) {
 
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
-            settings.databaseEnabled = true
             settings.javaScriptCanOpenWindowsAutomatically = true
 
             CookieManager.getInstance().setAcceptCookie(true)
