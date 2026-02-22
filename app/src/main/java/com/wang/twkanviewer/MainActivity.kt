@@ -23,7 +23,6 @@ class MainActivity : ComponentActivity() {
 
                 ReaderView(
                     url = url,
-                    onUrlChange = { url = it },
                     onScrap = { /*TODO: Implement scraping logic*/ },
                     onSave = { /*TODO: Implement save logic*/ }
                 )
