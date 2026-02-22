@@ -7,4 +7,5 @@
     <string name="scrap_button_label">Scrap</string>
     <string name="save_button_label">Save</string>
     <string name="url_textfield_label">URL</string>
+    <string name="translate_button_label">Translate</string>
 </resources>

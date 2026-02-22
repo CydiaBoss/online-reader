@@ -27,6 +27,7 @@ fun ReaderView(
     url: String,
     onScrap: () -> Unit,
     onSave: () -> Unit,
+    onTranslate: () -> Unit,
     onWebViewCreated: (WebView) -> Unit
 ) {
     Column {
@@ -39,6 +40,10 @@ fun ReaderView(
                 Spacer(Modifier.width(8.dp))
                 Button(onClick = onSave) {
                     Text(text = stringResource(id = R.string.save_button_label))
+                }
+                Spacer(Modifier.width(8.dp))
+                Button(onClick = onTranslate) {
+                    Text(text = stringResource(id = R.string.translate_button_label))
                 }
             }
         )
