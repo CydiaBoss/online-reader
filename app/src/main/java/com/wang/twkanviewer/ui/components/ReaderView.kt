@@ -38,12 +38,12 @@ fun ReaderView(
                     Text(text = stringResource(id = R.string.scrap_button_label))
                 }
                 Spacer(Modifier.width(8.dp))
-                Button(onClick = onSave) {
-                    Text(text = stringResource(id = R.string.save_button_label))
-                }
-                Spacer(Modifier.width(8.dp))
                 Button(onClick = onTranslate) {
                     Text(text = stringResource(id = R.string.translate_button_label))
+                }
+                Spacer(Modifier.width(8.dp))
+                Button(onClick = onSave) {
+                    Text(text = stringResource(id = R.string.save_button_label))
                 }
             }
         )
