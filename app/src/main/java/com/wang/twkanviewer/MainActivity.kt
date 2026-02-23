@@ -4,7 +4,6 @@ import android.os.Bundle
 import android.webkit.WebView
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -43,33 +42,35 @@ class MainActivity : ComponentActivity() {
 
                 var showDialog by remember { mutableStateOf(false) }
 
-                val onTranslate = {
-                    webView?.evaluateJavascript("(function() { return document.body.innerText; })();") { content ->
-                        translator.downloadModelIfNeeded(DownloadConditions.Builder().build())
-                            .addOnSuccessListener {
-                                translator.translate(content)
-                                    .addOnSuccessListener { text ->
-                                        translatedText = text
-                                        showDialog = true
-                                    }
-                                    .addOnFailureListener { exception ->
-                                        // Handle translation failure
-                                    }
-                            }
-                            .addOnFailureListener { exception ->
-                                // Handle model download failure
-                            }
-                    }
+                val onTranslate: (Boolean) -> Unit = {
+                    if (it)
+                        webView?.evaluateJavascript("(function() { return document.body.innerText; })();") { content ->
+                            translator.downloadModelIfNeeded(DownloadConditions.Builder().build())
+                                .addOnSuccessListener {
+                                    translator.translate(content)
+                                        .addOnSuccessListener { text ->
+                                            translatedText = text
+                                            showDialog = true
+                                        }
+                                        .addOnFailureListener { exception ->
+                                            // Handle translation failure
+                                        }
+                                }
+                                .addOnFailureListener { exception ->
+                                    // Handle model download failure
+                                }
+                        }
                 }
 
                 ReaderView(
                     url = url,
                     onScrap = {
-                        // TODO: Edit the javascript to extract the content you want.
-                        webView?.evaluateJavascript("(function() { return document.body.innerText; })();") { content ->
-                            // The 'content' variable now holds the extracted text.
-                            // You can process it further here.
-                        }
+                        if (it)
+                            // TODO: Edit the javascript to extract the content you want.
+                            webView?.evaluateJavascript("(function() { return document.body.innerText; })();") { content ->
+                                // The 'content' variable now holds the extracted text.
+                                // You can process it further here.
+                            }
                     },
                     onSave = { /*TODO: Implement save logic*/ },
                     onTranslate = onTranslate, // Pass the translate function
