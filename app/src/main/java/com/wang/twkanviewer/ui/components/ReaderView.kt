@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -21,6 +23,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -47,19 +50,15 @@ fun ReaderView(
             title = { Text(text = stringResource(id = R.string.app_name)) },
             actions = {
                 IconToggleButton(checked = false, onCheckedChange = onScrap, enabled = isBookOrTxt) {
-                    Text(text = stringResource(id = R.string.scrap_button_label))
+                    Icon(painter = painterResource(id = R.drawable.scan_24px), contentDescription = "scrapper")
                 }
-                Spacer(Modifier.width(8.dp))
-                IconToggleButton(
-                    checked = false,
-                    onCheckedChange = onTranslate,
-                    enabled = isBookOrTxt
-                ) {
-                    Text(text = stringResource(id = R.string.translate_button_label))
+                Spacer(Modifier.width(4.dp))
+                IconToggleButton(checked = false, onCheckedChange = onTranslate, enabled = isBookOrTxt) {
+                    Icon(painter = painterResource(id = R.drawable.translate_24px), contentDescription = "translator")
                 }
-                Spacer(Modifier.width(8.dp))
-                Button(onClick = onSave, enabled = isBookOrTxt) {
-                    Text(text = stringResource(id = R.string.save_button_label))
+                Spacer(Modifier.width(4.dp))
+                IconButton(onClick = onSave, enabled = isBookOrTxt) {
+                    Icon(painter = painterResource(id = R.drawable.add_24px), contentDescription = "save")
                 }
             }
         )
