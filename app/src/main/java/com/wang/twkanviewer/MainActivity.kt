@@ -5,6 +5,7 @@ import android.os.Bundle
 import android.view.ViewGroup
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
@@ -37,7 +38,6 @@ import com.google.mlkit.nl.translate.TranslatorOptions
 import com.wang.twkanviewer.models.Chapter
 import com.wang.twkanviewer.models.Story
 import com.wang.twkanviewer.ui.components.BrowserView
-import com.wang.twkanviewer.ui.components.ReaderView
 import com.wang.twkanviewer.ui.components.StoryView
 import com.wang.twkanviewer.ui.theme.TWKANViewerTheme
 import java.text.SimpleDateFormat
@@ -55,15 +55,21 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     // Regex
-                    val regexBook = Regex("/book/")
-                    val regexTxt = Regex("/txt/")
-                    val regexWordCount = Regex("((?:\\d+\\.)?\\d+)(\\w)字.+")
+                    val regexBook = Regex("/book/(\\d+)\\.html")
+                    val regexChapters = Regex("/book/(\\d+)/index\\.html")
+                    val regexChapterTitle = Regex("第(\\d+)章\\+(.)+")
+                    val regexTxt = Regex("/txt/(\\d+)/(\\d+)")
+                    val regexWordCount = Regex("((?:\\d+\\.)?\\d+)(\\p{InCJK_UNIFIED_IDEOGRAPHS})字.+")
                     val regexUpdateAt = Regex("更新：(\\d{4}-\\d{2}-\\d{2}).+")
                     val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
 
+                    // State
+                    var currentStory: Story? by remember { mutableStateOf(null) }
+                    var showStory by remember { mutableStateOf(false) }
+                    var showTranslate by remember { mutableStateOf(false) }
+
                     // WebView
                     var url by remember { mutableStateOf("https://twkan.com") }
-
                     @SuppressLint("SetJavaScriptEnabled")
                     val webView = remember {
                         WebView(this).apply {
@@ -72,6 +78,119 @@ class MainActivity : ComponentActivity() {
                                 ViewGroup.LayoutParams.MATCH_PARENT
                             )
                             webViewClient = object : WebViewClient() {
+                                override fun shouldOverrideUrlLoading(
+                                    view: WebView?,
+                                    request: WebResourceRequest?
+                                ): Boolean {
+                                    return request?.url?.host?.contains("twkan.com")!! && super.shouldOverrideUrlLoading(view, request)
+                                }
+
+                                override fun onPageFinished(view: WebView?, url: String?) {
+                                    // Scrap website for story details
+                                    if (url != null)
+                                        evaluateJavascript(
+                                            "(" +
+                                                "function() { " +
+                                                    "if (typeof LoadMore === 'function') LoadMore(); " +
+                                                    "return document.body.getElementsByClassName('container')[0].outerHTML;" +
+                                                "}" +
+                                            ")();"
+                                        ) { content ->
+                                            // The 'content' variable is a JSON-encoded string, so it needs to be unescaped.
+                                            val unescapedHtml = content.trim().removeSurrounding("\"")
+                                                .replace("\\u003C", "<")
+                                                .replace("\\n", "\n")
+                                                .replace("\\t", "\t")
+                                                .replace("\\\"", "\"")
+
+                                            // Parse the HTML with Jsoup
+                                            val doc = Ksoup.parse(unescapedHtml)
+
+                                            // Process if book URL
+                                            val matchBookUrl = regexBook.find(url)
+                                            if (matchBookUrl != null) {
+                                                val title = doc.selectFirst("div.booknav2 h1 a")?.text() ?: ""
+                                                val imgUrl = doc.selectFirst("div.bookimg2 img")?.attr("src") ?: ""
+                                                val genre = doc.selectFirst("div.booknav2 a[href*=/novels/class/]")?.text() ?: ""
+                                                val author = doc.selectFirst("div.booknav2 a[href*=/author/]")?.text() ?: ""
+                                                val description = doc.selectFirst("div.navtxt > p")?.text() ?: ""
+                                                val completed = doc.selectFirst("span.status1") != null
+                                                var wordCount = 0.0F
+                                                var lastUpdated = Date()
+                                                doc.select("div.booknav2 > p").forEach { p ->
+                                                    val text = p.text()
+
+                                                    // Word Count
+                                                    val matchWordCounter = regexWordCount.matchEntire(text)
+                                                    if (matchWordCounter != null) {
+                                                        wordCount = matchWordCounter.groupValues[1].toFloat()
+                                                        // Multiplier
+                                                        when (matchWordCounter.groupValues[2]) {
+                                                            "百" -> wordCount *= 100
+                                                            "千" -> wordCount *= 1000
+                                                            "萬", "万" -> wordCount *= 10000
+                                                            "億", "亿" -> wordCount *= 100000000
+                                                        }
+                                                        return@forEach
+                                                    }
+
+                                                    // Updated At
+                                                    val matchUpdateAt = regexUpdateAt.matchEntire(text)
+                                                    if (matchUpdateAt != null) {
+                                                        lastUpdated =
+                                                            dateFormat.parse(matchUpdateAt.groupValues[1])
+                                                                ?: Date()
+                                                        return@forEach
+                                                    }
+                                                }
+                                                val tags = doc.select("div.tagul a").map { it.text() }
+
+                                                currentStory = Story(
+                                                    id = matchBookUrl.groupValues[1].toInt(),
+                                                    url = url,
+                                                    title = title,
+                                                    imgUrl = imgUrl,
+                                                    genre = genre,
+                                                    author = author,
+                                                    description = description,
+                                                    completed = completed,
+                                                    wordCount = wordCount.toInt(),
+                                                    lastUpdated = lastUpdated,
+                                                    tags = tags,
+                                                    chapters = mutableListOf()
+                                                )
+                                                return@evaluateJavascript
+                                            }
+
+                                            // Process if chapters URL
+                                            val matchChaptersUrl = regexChapters.find(url)
+                                            if (matchChaptersUrl != null) {
+                                                // Parse chapters
+                                                doc.select("div#allchapter a").forEach { cLink ->
+                                                    val tokens = regexChapterTitle.find(cLink.text().trim())
+                                                    if (tokens != null)
+                                                        currentStory?.chapters?.add(Chapter(
+                                                            id = tokens.groupValues[1].toInt(),
+                                                            title = tokens.groupValues[2],
+                                                            url = cLink.attr("href"),
+                                                            uploadedAt = null,
+                                                            content = null
+                                                        ))
+                                                }
+                                                return@evaluateJavascript
+                                            }
+
+                                            // Process if txt URL
+                                            val matchTxtUrl = regexTxt.find(url)
+                                            if (regexTxt.containsMatchIn(url)) {
+                                                // Parse chapter page here
+
+                                                return@evaluateJavascript
+                                            }
+                                        }
+                                    super.onPageFinished(view, url)
+                                }
+
                                 override fun doUpdateVisitedHistory(
                                     view: WebView?,
                                     urlLocal: String?,
@@ -97,8 +216,10 @@ class MainActivity : ComponentActivity() {
                             loadUrl(url)
                         }
                     }
-                    val isBookOrTxt = remember(url) {
-                        regexBook.containsMatchIn(url) || regexTxt.containsMatchIn(url)
+                    val isScrappableUrl = remember(url) {
+                        regexBook.containsMatchIn(url) ||
+                        regexChapters.containsMatchIn(url) ||
+                        regexTxt.containsMatchIn(url)
                     }
 
                     // Translator
@@ -108,83 +229,13 @@ class MainActivity : ComponentActivity() {
                         .build()
                     val translator = Translation.getClient(options)
 
-                    // State
-                    var showDialog by remember { mutableStateOf(false) }
-                    var showStory: Story? by remember { mutableStateOf(null) }
-                    var showTranslate by remember { mutableStateOf(false) }
-
                     // Function
                     val onScrap: (Boolean) -> Unit = {
-                        if (it && isBookOrTxt)
-                        // Scrap website for story details
-                            webView.evaluateJavascript("document.body.getElementsByClassName('container')[0].outerHTML;") { content ->
-                                // The 'content' variable is a JSON-encoded string, so it needs to be unescaped.
-                                val unescapedHtml = content.trim().removeSurrounding("\"")
-                                    .replace("\\u003C", "<")
-                                    .replace("\\n", "\n")
-                                    .replace("\\t", "\t")
-                                    .replace("\\\"", "\"")
-
-                                // Parse the HTML with Jsoup
-                                val doc = Ksoup.parse(unescapedHtml)
-
-                                // Process as needed
-                                if (regexBook.containsMatchIn(url)) {
-                                    val title = doc.selectFirst("div.booknav2 h1 a")?.text() ?: ""
-                                    val imgUrl = doc.selectFirst("div.bookimg2 img")?.attr("src") ?: ""
-                                    val genre = doc.selectFirst("div.booknav2 a[href*=/novels/class/]")?.text() ?: ""
-                                    val author = doc.selectFirst("div.booknav2 a[href*=/author/]")?.text() ?: ""
-                                    val description = doc.selectFirst("div.navtxt > p")?.text() ?: ""
-                                    val completed = doc.selectFirst("span.status1") != null
-                                    var wordCount = 0.0F
-                                    var lastUpdated = Date()
-                                    doc.select("div.booknav2 > p").forEach { p ->
-                                        val text = p.text()
-                                        println("ptag: $text")
-
-                                        // Word Count
-                                        val matchWordCounter = regexWordCount.matchEntire(text)
-                                        if (matchWordCounter != null) {
-                                            wordCount = matchWordCounter.groupValues[1].toFloat()
-                                            // Multiplier
-                                            when (matchWordCounter.groupValues[2]) {
-                                                "百" -> wordCount *= 100
-                                                "千" -> wordCount *= 1000
-                                                "萬", "万" -> wordCount *= 10000
-                                                "億", "亿" -> wordCount *= 100000000
-                                            }
-                                            return@forEach
-                                        }
-
-                                        // Updated At
-                                        val matchUpdateAt = regexUpdateAt.matchEntire(text)
-                                        if (matchUpdateAt != null) {
-                                            lastUpdated =
-                                                dateFormat.parse(matchUpdateAt.groupValues[1])
-                                                    ?: Date()
-                                            return@forEach
-                                        }
-                                    }
-                                    val tags = doc.select("div.tagul a").map { it.text() }
-
-                                    showStory = Story(
-                                        title = title,
-                                        imgUrl = imgUrl,
-                                        genre = genre,
-                                        author = author,
-                                        description = description,
-                                        completed = completed,
-                                        wordCount = wordCount.toInt(),
-                                        lastUpdated = lastUpdated,
-                                        tags = tags,
-                                        chapters = mutableListOf()
-                                    )
-                                } else if (regexTxt.containsMatchIn(url)) {
-                                    // Parse chapter page here
-                                }
-                            }
+                        if (it && isScrappableUrl)
+                            if (regexBook.find(url) != null)
+                                showStory = true
                         else
-                            showStory = null
+                            showStory = false
                     }
                     val onTranslate: (Boolean) -> Unit = {
                         showTranslate = it
@@ -196,7 +247,7 @@ class MainActivity : ComponentActivity() {
                                     .addOnSuccessListener {
                                         translator.translate(content)
                                             .addOnSuccessListener { text ->
-                                                showDialog = true
+                                                // Translate
                                             }
                                             .addOnFailureListener { exception ->
                                                 // Handle translation failure
@@ -211,8 +262,8 @@ class MainActivity : ComponentActivity() {
 
                     // Back Handler
                     BackHandler(enabled = true) {
-                        if (showStory != null) {
-                            showStory = null
+                        if (showStory) {
+                            showStory = false
                         } else if (webView.canGoBack()) {
                             webView.goBack()
                         } else {
@@ -225,15 +276,14 @@ class MainActivity : ComponentActivity() {
                         TopAppBar(
                             title = {
                                 Text(
-                                    //                            fontSize = MaterialTheme.typography.titleLarge.fontSize,
                                     text = stringResource(id = R.string.app_name)
                                 )
                             },
                             actions = {
                                 IconToggleButton(
-                                    checked = showStory != null,
+                                    checked = showStory,
                                     onCheckedChange = onScrap,
-                                    enabled = isBookOrTxt
+                                    enabled = isScrappableUrl
                                 ) {
                                     Icon(
                                         painter = painterResource(id = R.drawable.scan_24px),
@@ -244,7 +294,7 @@ class MainActivity : ComponentActivity() {
                                 IconToggleButton(
                                     checked = false,
                                     onCheckedChange = onTranslate,
-                                    enabled = isBookOrTxt
+                                    enabled = isScrappableUrl
                                 ) {
                                     Icon(
                                         painter = painterResource(id = R.drawable.translate_24px),
@@ -252,7 +302,7 @@ class MainActivity : ComponentActivity() {
                                     )
                                 }
                                 Spacer(Modifier.width(4.dp))
-                                IconButton(onClick = onSave, enabled = isBookOrTxt) {
+                                IconButton(onClick = onSave, enabled = isScrappableUrl) {
                                     Icon(
                                         painter = painterResource(id = R.drawable.add_24px),
                                         contentDescription = "save"
@@ -260,13 +310,13 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         )
-                        if (showStory == null)
-                            BrowserView(webView = webView)
-                        else
+                        if (showStory)
                             StoryView(
-                                story = showStory!!,
+                                story = currentStory!!,
                                 onChapterClick = { /*TODO*/ }
                             )
+                        else
+                            BrowserView(webView = webView)
                     }
                 }
             }
