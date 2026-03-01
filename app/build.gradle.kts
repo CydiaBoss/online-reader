@@ -60,6 +60,8 @@ dependencies {
     implementation(libs.androidx.browser)
     implementation(libs.material)
     implementation(libs.translate)
+    implementation(libs.coil.compose)
+    implementation(libs.ksoup)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
