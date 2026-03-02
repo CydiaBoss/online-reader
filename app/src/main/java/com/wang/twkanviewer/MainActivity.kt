@@ -29,8 +29,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.fleeksoft.ksoup.Ksoup
+import com.google.android.gms.common.internal.ShowFirstParty
 import com.google.mlkit.common.model.DownloadConditions
 import com.google.mlkit.nl.translate.TranslateLanguage
 import com.google.mlkit.nl.translate.Translation
@@ -38,6 +40,7 @@ import com.google.mlkit.nl.translate.TranslatorOptions
 import com.wang.twkanviewer.models.Chapter
 import com.wang.twkanviewer.models.Story
 import com.wang.twkanviewer.ui.components.BrowserView
+import com.wang.twkanviewer.ui.components.ChapterListView
 import com.wang.twkanviewer.ui.components.StoryView
 import com.wang.twkanviewer.ui.theme.TWKANViewerTheme
 import java.text.SimpleDateFormat
@@ -51,9 +54,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             // A surface container using the 'background' color from the theme
             TWKANViewerTheme {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                ) {
+                Surface( modifier = Modifier.fillMaxSize()) {
                     // Regex
                     val regexBook = Regex("/book/(\\d+)\\.html")
                     val regexChapters = Regex("/book/(\\d+)/index\\.html")
@@ -62,10 +63,14 @@ class MainActivity : ComponentActivity() {
                     val regexWordCount = Regex("((?:\\d+\\.)?\\d+)(\\p{InCJK_UNIFIED_IDEOGRAPHS})字.+")
                     val regexUpdateAt = Regex("更新：(\\d{4}-\\d{2}-\\d{2}).+")
                     val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                    val dateTimeFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
 
                     // State
                     var currentStory: Story? by remember { mutableStateOf(null) }
+                    var showStories by remember { mutableStateOf(false) }
                     var showStory by remember { mutableStateOf(false) }
+                    var showChapters by remember { mutableStateOf(false) }
+                    var showChapter by remember { mutableStateOf(false) }
                     var showTranslate by remember { mutableStateOf(false) }
 
                     // WebView
@@ -78,10 +83,7 @@ class MainActivity : ComponentActivity() {
                                 ViewGroup.LayoutParams.MATCH_PARENT
                             )
                             webViewClient = object : WebViewClient() {
-                                override fun shouldOverrideUrlLoading(
-                                    view: WebView?,
-                                    request: WebResourceRequest?
-                                ): Boolean {
+                                override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                                     return request?.url?.host?.contains("twkan.com")!! && super.shouldOverrideUrlLoading(view, request)
                                 }
 
@@ -184,6 +186,11 @@ class MainActivity : ComponentActivity() {
                                             val matchTxtUrl = regexTxt.find(url)
                                             if (regexTxt.containsMatchIn(url)) {
                                                 // Parse chapter page here
+                                                val chapterDate = dateTimeFormat.parse(doc.selectFirst("div.txtinfo > span")?.text()!!)
+                                                val chapterContent = doc.selectFirst("div.txtcontent0")?.text()!!
+                                                val currentChapter = currentStory?.chapters?.find { it.url == url }!!
+                                                currentChapter.uploadedAt = chapterDate
+                                                currentChapter.content = chapterContent
 
                                                 return@evaluateJavascript
                                             }
@@ -191,11 +198,7 @@ class MainActivity : ComponentActivity() {
                                     super.onPageFinished(view, url)
                                 }
 
-                                override fun doUpdateVisitedHistory(
-                                    view: WebView?,
-                                    urlLocal: String?,
-                                    isReload: Boolean
-                                ) {
+                                override fun doUpdateVisitedHistory(view: WebView?, urlLocal: String?, isReload: Boolean) {
                                     url = urlLocal!!
                                     super.doUpdateVisitedHistory(view, urlLocal, isReload)
                                 }
@@ -230,13 +233,34 @@ class MainActivity : ComponentActivity() {
                     val translator = Translation.getClient(options)
 
                     // Function
-                    val onScrap: (Boolean) -> Unit = {
-                        if (it && isScrappableUrl)
+                    val onShowScrapped: (Boolean) -> Unit = {
+                        if (it && isScrappableUrl) {
                             if (regexBook.find(url) != null)
                                 showStory = true
-                        else
+                            else if (regexChapters.find(url) != null)
+                                showChapters = true
+                            else if (regexTxt.find(url) != null)
+                                showChapter = true
+                        }else{
+                            showStories = false
                             showStory = false
+                            showChapters = false
+                            showTranslate = false
+                            showChapter = false
+                        }
                     }
+                    val onShowChapters: () -> Unit = {
+                        if (currentStory != null) {
+                            if (currentStory!!.chapters.isEmpty()) {
+                                // Load Chapters Page
+                                webView.loadUrl(currentStory!!.url.replace(".html", "/index.html"))
+                            }
+                            showChapters = true
+                            showStory = false
+                            showStories = false
+                        }
+                    }
+                    val onShowChapter: (Chapter) -> Unit = {}
                     val onTranslate: (Boolean) -> Unit = {
                         showTranslate = it
                         if (it)
@@ -262,8 +286,14 @@ class MainActivity : ComponentActivity() {
 
                     // Back Handler
                     BackHandler(enabled = true) {
-                        if (showStory) {
+                        if (showStories) {
+                            showStories = false
+                        } else if (showStory) {
                             showStory = false
+                        } else if (showChapters) {
+                            showChapters = false
+                        } else if (showChapter) {
+                            showChapter = false
                         } else if (webView.canGoBack()) {
                             webView.goBack()
                         } else {
@@ -281,9 +311,9 @@ class MainActivity : ComponentActivity() {
                             },
                             actions = {
                                 IconToggleButton(
-                                    checked = showStory,
-                                    onCheckedChange = onScrap,
-                                    enabled = isScrappableUrl
+                                    checked = showStory || showChapters || showChapter,
+                                    onCheckedChange = onShowScrapped,
+                                    enabled = isScrappableUrl && currentStory != null
                                 ) {
                                     Icon(
                                         painter = painterResource(id = R.drawable.scan_24px),
@@ -292,9 +322,9 @@ class MainActivity : ComponentActivity() {
                                 }
                                 Spacer(Modifier.width(4.dp))
                                 IconToggleButton(
-                                    checked = false,
+                                    checked = showTranslate,
                                     onCheckedChange = onTranslate,
-                                    enabled = isScrappableUrl
+                                    enabled = isScrappableUrl && currentStory != null
                                 ) {
                                     Icon(
                                         painter = painterResource(id = R.drawable.translate_24px),
@@ -302,7 +332,10 @@ class MainActivity : ComponentActivity() {
                                     )
                                 }
                                 Spacer(Modifier.width(4.dp))
-                                IconButton(onClick = onSave, enabled = isScrappableUrl) {
+                                IconButton(
+                                    onClick = onSave,
+                                    enabled = isScrappableUrl && currentStory != null
+                                ) {
                                     Icon(
                                         painter = painterResource(id = R.drawable.add_24px),
                                         contentDescription = "save"
@@ -310,10 +343,17 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         )
+
+                        // Check one of the views
                         if (showStory)
                             StoryView(
                                 story = currentStory!!,
-                                onChapterClick = { /*TODO*/ }
+                                onChapterClick = onShowChapters
+                            )
+                        else if (showChapters)
+                            ChapterListView(
+                                story = currentStory!!,
+                                onClickChapter = onShowChapter
                             )
                         else
                             BrowserView(webView = webView)

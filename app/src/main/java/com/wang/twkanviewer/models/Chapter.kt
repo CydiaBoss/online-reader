@@ -6,6 +6,6 @@ data class Chapter(
     val id: Int,
     val title: String,
     val url: String,
-    val uploadedAt: Date?,
-    val content: String?
+    var uploadedAt: Date?,
+    var content: String?
 )
