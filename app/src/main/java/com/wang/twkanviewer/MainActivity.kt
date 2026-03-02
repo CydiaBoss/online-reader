@@ -168,7 +168,7 @@ class MainActivity : ComponentActivity() {
                                             val matchChaptersUrl = regexChapters.find(url)
                                             if (matchChaptersUrl != null) {
                                                 // Parse chapters
-                                                doc.select("div#allchapter a").forEach { cLink ->
+                                                doc.select("div#allchapter ul li a").forEach { cLink ->
                                                     val tokens = regexChapterTitle.find(cLink.text().trim())
                                                     if (tokens != null)
                                                         currentStory?.chapters?.add(Chapter(
