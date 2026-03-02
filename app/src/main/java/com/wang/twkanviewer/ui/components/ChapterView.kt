@@ -30,8 +30,13 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.wang.twkanviewer.R
 
 @Composable
-fun ReaderView(
+fun ChapterView(
     chapter: Chapter
 ) {
-
+    Column {
+        Text(text = chapter.title)
+        Text(text = chapter.uploadedAt.toString())
+        HorizontalDivider(thickness = 2.dp)
+        Text(text = chapter.content)
+    }
 }
