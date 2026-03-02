@@ -382,7 +382,7 @@ class MainActivity : ComponentActivity() {
                                 onClickChapter = onShowChapter
                             )
                         else if (showChapter)
-                            ReaderView(
+                            ChapterView(
                                 chapter = currentChapter!!
                             )
                         else
