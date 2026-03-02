@@ -381,6 +381,10 @@ class MainActivity : ComponentActivity() {
                                 chapters = currentChapters,
                                 onClickChapter = onShowChapter
                             )
+                        else if (showChapter)
+                            ReaderView(
+                                chapter = currentChapter!!
+                            )
                         else
                             BrowserView(webView = webView)
                     }

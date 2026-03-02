@@ -33,7 +33,7 @@ import com.wang.twkanviewer.R
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 fun ReaderView(
-    webView: WebView
+    chapter: Chapter
 ) {
 
 }
