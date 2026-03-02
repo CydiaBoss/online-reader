@@ -1,18 +1,22 @@
 package com.wang.twkanviewer.models
 
+import androidx.room.ColumnInfo
+import androidx.room.Entity
+import androidx.room.Ignore
+import androidx.room.PrimaryKey
 import java.util.Date
 
+@Entity(tableName = "stories")
 data class Story(
-    val id: Int,
-    val url: String,
-    val title: String,
-    val imgUrl: String,
-    val genre: String,
-    val author: String,
-    val description: String,
-    val completed: Boolean,
-    val wordCount: Int,
-    val lastUpdated: Date,
-    val tags: List<String>,
-    val chapters: MutableList<Chapter>
+    @PrimaryKey val id: Int,
+    @ColumnInfo(name = "url") val url: String,
+    @ColumnInfo(name = "title") val title: String,
+    @ColumnInfo(name = "img_url") val imgUrl: String,
+    @ColumnInfo(name = "genre") val genre: String,
+    @ColumnInfo(name = "author") val author: String,
+    @ColumnInfo(name = "description") val description: String,
+    @ColumnInfo(name = "completed") val completed: Boolean,
+    @ColumnInfo(name = "word_count") val wordCount: Int,
+    @ColumnInfo(name = "last_updated") val lastUpdated: Date,
+    @ColumnInfo(name = "tags") val tags: List<String>
 )

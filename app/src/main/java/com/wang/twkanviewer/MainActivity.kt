@@ -25,6 +25,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
@@ -37,12 +38,14 @@ import com.google.mlkit.common.model.DownloadConditions
 import com.google.mlkit.nl.translate.TranslateLanguage
 import com.google.mlkit.nl.translate.Translation
 import com.google.mlkit.nl.translate.TranslatorOptions
+import com.wang.twkanviewer.database.AppDatabase
 import com.wang.twkanviewer.models.Chapter
 import com.wang.twkanviewer.models.Story
 import com.wang.twkanviewer.ui.components.BrowserView
 import com.wang.twkanviewer.ui.components.ChapterListView
 import com.wang.twkanviewer.ui.components.StoryView
 import com.wang.twkanviewer.ui.theme.TWKANViewerTheme
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -58,7 +61,6 @@ class MainActivity : ComponentActivity() {
                     // Regex
                     val regexBook = Regex("/book/(\\d+)\\.html")
                     val regexChapters = Regex("/book/(\\d+)/index\\.html")
-                    val regexChapterTitle = Regex("第(\\d+)章\\+(.)+")
                     val regexTxt = Regex("/txt/(\\d+)/(\\d+)")
                     val regexWordCount = Regex("((?:\\d+\\.)?\\d+)(\\p{InCJK_UNIFIED_IDEOGRAPHS})字.+")
                     val regexUpdateAt = Regex("更新：(\\d{4}-\\d{2}-\\d{2}).+")
@@ -72,6 +74,14 @@ class MainActivity : ComponentActivity() {
                     var showChapters by remember { mutableStateOf(false) }
                     var showChapter by remember { mutableStateOf(false) }
                     var showTranslate by remember { mutableStateOf(false) }
+
+                    // Database
+                    val db = AppDatabase.getDatabase(this)
+                    val storyDao = db.storyDao()
+                    val chapterDao = db.chapterDao()
+
+                    // Coroutine Scope
+                    val scope = rememberCoroutineScope()
 
                     // WebView
                     var url by remember { mutableStateOf("https://twkan.com") }
@@ -159,7 +169,6 @@ class MainActivity : ComponentActivity() {
                                                     wordCount = wordCount.toInt(),
                                                     lastUpdated = lastUpdated,
                                                     tags = tags,
-                                                    chapters = mutableListOf()
                                                 )
                                                 return@evaluateJavascript
                                             }
@@ -168,16 +177,21 @@ class MainActivity : ComponentActivity() {
                                             val matchChaptersUrl = regexChapters.find(url)
                                             if (matchChaptersUrl != null) {
                                                 // Parse chapters
+                                                var i = 1
                                                 doc.select("div#allchapter ul li a").forEach { cLink ->
-                                                    val tokens = regexChapterTitle.find(cLink.text().trim())
-                                                    if (tokens != null)
-                                                        currentStory?.chapters?.add(Chapter(
-                                                            id = tokens.groupValues[1].toInt(),
-                                                            title = tokens.groupValues[2],
-                                                            url = cLink.attr("href"),
-                                                            uploadedAt = null,
-                                                            content = null
-                                                        ))
+                                                    // Parse chapter url
+                                                    val tokens = regexTxt.find(cLink.attr("href"))
+                                                    if (tokens == null) return@forEach
+
+                                                    currentStory?.chapters?.add(Chapter(
+                                                        id = tokens.groupValues[2].toInt()
+                                                        order = i,
+                                                        title = cLink.text().trim(),
+                                                        url = cLink.attr("href"),
+                                                        uploadedAt = null,
+                                                        content = null
+                                                    ))
+                                                    i++;
                                                 }
                                                 return@evaluateJavascript
                                             }
@@ -282,7 +296,17 @@ class MainActivity : ComponentActivity() {
                                     }
                             }
                     }
-                    val onSave: () -> Unit = {};
+                    val onSave: () -> Unit = {
+                        scope.launch {
+                            currentStory?.let { story ->
+                                storyDao.insert(story)
+                                story.chapters.forEach { chapter ->
+                                    chapter.storyId = story.id
+                                }
+                                chapterDao.insertAll(story.chapters)
+                            }
+                        }
+                    };
 
                     // Back Handler
                     BackHandler(enabled = true) {
