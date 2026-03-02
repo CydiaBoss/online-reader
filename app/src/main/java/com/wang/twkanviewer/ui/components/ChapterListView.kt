@@ -13,7 +13,7 @@ import com.wang.twkanviewer.models.Story
 
 @Composable
 fun ChapterListView(
-    story: Story,
+    chapters: List<Chapter>,
     onClickChapter: (Chapter) -> Unit
 ) {
     LazyColumn(

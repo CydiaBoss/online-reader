@@ -69,6 +69,8 @@ class MainActivity : ComponentActivity() {
 
                     // State
                     var currentStory: Story? by remember { mutableStateOf(null) }
+                    var currentChapters by remember { mutableListOf<Chapter>() }
+                    var currentChapter: Chapter? by remember { mutableStateOf(null) }
                     var showStories by remember { mutableStateOf(false) }
                     var showStory by remember { mutableStateOf(false) }
                     var showChapters by remember { mutableStateOf(false) }
@@ -376,7 +378,7 @@ class MainActivity : ComponentActivity() {
                             )
                         else if (showChapters)
                             ChapterListView(
-                                story = currentStory!!,
+                                chapters = currentChapters,
                                 onClickChapter = onShowChapter
                             )
                         else
