@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconToggleButton
@@ -28,6 +29,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.wang.twkanviewer.R
+import com.wang.twkanviewer.models.Chapter
 
 @Composable
 fun ChapterView(
@@ -37,6 +39,6 @@ fun ChapterView(
         Text(text = chapter.title)
         Text(text = chapter.uploadedAt.toString())
         HorizontalDivider(thickness = 2.dp)
-        Text(text = chapter.content)
+        Text(text = chapter.content?:"")
     }
 }

@@ -19,7 +19,7 @@ fun ChapterListView(
     LazyColumn(
         modifier = Modifier.fillMaxSize()
     ) {
-        items(story.chapters) { chapter ->
+        items(chapters) { chapter ->
             Text(
                 text = chapter.title,
                 modifier = Modifier

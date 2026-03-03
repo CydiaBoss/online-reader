@@ -23,6 +23,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -43,6 +44,7 @@ import com.wang.twkanviewer.models.Chapter
 import com.wang.twkanviewer.models.Story
 import com.wang.twkanviewer.ui.components.BrowserView
 import com.wang.twkanviewer.ui.components.ChapterListView
+import com.wang.twkanviewer.ui.components.ChapterView
 import com.wang.twkanviewer.ui.components.StoryView
 import com.wang.twkanviewer.ui.theme.TWKANViewerTheme
 import kotlinx.coroutines.launch
@@ -68,8 +70,8 @@ class MainActivity : ComponentActivity() {
                     val dateTimeFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
 
                     // State
+                    val currentChapters = remember { mutableStateListOf<Chapter>() }
                     var currentStory: Story? by remember { mutableStateOf(null) }
-                    var currentChapters by remember { mutableListOf<Chapter>() }
                     var currentChapter: Chapter? by remember { mutableStateOf(null) }
                     var showStories by remember { mutableStateOf(false) }
                     var showStory by remember { mutableStateOf(false) }
@@ -185,8 +187,10 @@ class MainActivity : ComponentActivity() {
                                                     val tokens = regexTxt.find(cLink.attr("href"))
                                                     if (tokens == null) return@forEach
 
-                                                    currentStory?.chapters?.add(Chapter(
-                                                        id = tokens.groupValues[2].toInt()
+                                                    currentChapters.clear()
+                                                    currentChapters.add(Chapter(
+                                                        id = tokens.groupValues[2].toInt(),
+                                                        storyId = currentStory!!.id,
                                                         order = i,
                                                         title = cLink.text().trim(),
                                                         url = cLink.attr("href"),
@@ -204,7 +208,7 @@ class MainActivity : ComponentActivity() {
                                                 // Parse chapter page here
                                                 val chapterDate = dateTimeFormat.parse(doc.selectFirst("div.txtinfo > span")?.text()!!)
                                                 val chapterContent = doc.selectFirst("div.txtcontent0")?.text()!!
-                                                val currentChapter = currentStory?.chapters?.find { it.url == url }!!
+                                                val currentChapter = currentChapters.find { it.url == url }!!
                                                 currentChapter.uploadedAt = chapterDate
                                                 currentChapter.content = chapterContent
 
@@ -267,7 +271,7 @@ class MainActivity : ComponentActivity() {
                     }
                     val onShowChapters: () -> Unit = {
                         if (currentStory != null) {
-                            if (currentStory!!.chapters.isEmpty()) {
+                            if (currentChapters.isEmpty()) {
                                 // Load Chapters Page
                                 webView.loadUrl(currentStory!!.url.replace(".html", "/index.html"))
                             }
@@ -302,10 +306,10 @@ class MainActivity : ComponentActivity() {
                         scope.launch {
                             currentStory?.let { story ->
                                 storyDao.insert(story)
-                                story.chapters.forEach { chapter ->
+                                currentChapters.forEach { chapter ->
                                     chapter.storyId = story.id
                                 }
-                                chapterDao.insertAll(story.chapters)
+                                chapterDao.insertAll(currentChapters)
                             }
                         }
                     };

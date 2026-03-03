@@ -11,6 +11,6 @@ interface ChapterDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(chapters: List<Chapter>)
 
-    @Query("SELECT * FROM chapters WHERE story_id = :storyId ORDER BY order ASC")
+    @Query("SELECT * FROM chapters WHERE story_id = :storyId ORDER BY 'order' ASC")
     suspend fun getChaptersForStory(storyId: Int): List<Chapter>
 }
