@@ -31,10 +31,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.fleeksoft.ksoup.Ksoup
-import com.google.android.gms.common.internal.ShowFirstParty
 import com.google.mlkit.common.model.DownloadConditions
 import com.google.mlkit.nl.translate.TranslateLanguage
 import com.google.mlkit.nl.translate.Translation
@@ -54,6 +52,17 @@ import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 class MainActivity : ComponentActivity() {
+
+    /**
+     * Special Android Web Bridge
+     */
+    class WebAppInterface(private val onResult: (String) -> Unit) {
+        @android.webkit.JavascriptInterface
+        fun onContentScraped(html: String) {
+            onResult(html)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
@@ -88,7 +97,7 @@ class MainActivity : ComponentActivity() {
                     val scope = rememberCoroutineScope()
 
                     // WebView
-                    var url by remember { mutableStateOf("https://twkan.com") }
+                    var currentUrl by remember { mutableStateOf("https://twkan.com") }
                     @SuppressLint("SetJavaScriptEnabled")
                     val webView = remember {
                         WebView(this).apply {
@@ -96,99 +105,110 @@ class MainActivity : ComponentActivity() {
                                 ViewGroup.LayoutParams.MATCH_PARENT,
                                 ViewGroup.LayoutParams.MATCH_PARENT
                             )
-                            webViewClient = object : WebViewClient() {
-                                override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-                                    return request?.url?.host?.contains("twkan.com")!! && super.shouldOverrideUrlLoading(view, request)
-                                }
 
-                                override fun onPageFinished(view: WebView?, url: String?) {
-                                    // Scrap website for story details
-                                    if (url != null)
-                                        evaluateJavascript(
-                                            "(" +
-                                                "function() { " +
-                                                    "if (typeof LoadMore === 'function') LoadMore(); " +
-                                                    "return document.body.getElementsByClassName('container')[0].outerHTML;" +
-                                                "}" +
-                                            ")();"
-                                        ) { content ->
-                                            // The 'content' variable is a JSON-encoded string, so it needs to be unescaped.
-                                            val unescapedHtml = content.trim().removeSurrounding("\"")
-                                                .replace("\\u003C", "<")
-                                                .replace("\\n", "\n")
-                                                .replace("\\t", "\t")
-                                                .replace("\\\"", "\"")
+                            // Link to Android Bridge
+                            addJavascriptInterface(WebAppInterface({ content ->
+                                // Help with bg js thread
+                                scope.launch {
+                                    // Validate url
+                                    if (url == null) return@launch
+                                    val loadedUrl = url!!
 
-                                            // Parse the HTML with Jsoup
-                                            val doc = Ksoup.parse(unescapedHtml)
+                                    // The 'content' variable is a JSON-encoded string, so it needs to be unescaped.
+                                    val unescapedHtml =
+                                        content.trim().removeSurrounding("\"")
+                                            .replace("\\u003C", "<")
+                                            .replace("\\n", "\n")
+                                            .replace("\\t", "\t")
+                                            .replace("\\\"", "\"")
 
-                                            // Process if book URL
-                                            val matchBookUrl = regexBook.find(url)
-                                            if (matchBookUrl != null) {
-                                                val title = doc.selectFirst("div.booknav2 h1 a")?.text() ?: ""
-                                                val imgUrl = doc.selectFirst("div.bookimg2 img")?.attr("src") ?: ""
-                                                val genre = doc.selectFirst("div.booknav2 a[href*=/novels/class/]")?.text() ?: ""
-                                                val author = doc.selectFirst("div.booknav2 a[href*=/author/]")?.text() ?: ""
-                                                val description = doc.selectFirst("div.navtxt > p")?.text() ?: ""
-                                                val completed = doc.selectFirst("span.status1") != null
-                                                var wordCount = 0.0F
-                                                var lastUpdated = Date()
-                                                doc.select("div.booknav2 > p").forEach { p ->
-                                                    val text = p.text()
+                                    // Parse the HTML with Jsoup
+                                    val doc = Ksoup.parse(unescapedHtml)
 
-                                                    // Word Count
-                                                    val matchWordCounter = regexWordCount.matchEntire(text)
-                                                    if (matchWordCounter != null) {
-                                                        wordCount = matchWordCounter.groupValues[1].toFloat()
-                                                        // Multiplier
-                                                        when (matchWordCounter.groupValues[2]) {
-                                                            "百" -> wordCount *= 100
-                                                            "千" -> wordCount *= 1000
-                                                            "萬", "万" -> wordCount *= 10000
-                                                            "億", "亿" -> wordCount *= 100000000
-                                                        }
-                                                        return@forEach
-                                                    }
+                                    // Process if book URL
+                                    val matchBookUrl = regexBook.find(loadedUrl)
+                                    if (matchBookUrl != null) {
+                                        val title =
+                                            doc.selectFirst("div.booknav2 h1 a")?.text()
+                                                ?: ""
+                                        val imgUrl =
+                                            doc.selectFirst("div.bookimg2 img")?.attr("src")
+                                                ?: ""
+                                        val genre =
+                                            doc.selectFirst("div.booknav2 a[href*=/novels/class/]")
+                                                ?.text() ?: ""
+                                        val author =
+                                            doc.selectFirst("div.booknav2 a[href*=/author/]")
+                                                ?.text() ?: ""
+                                        val description =
+                                            doc.selectFirst("div.navtxt > p")?.text() ?: ""
+                                        val completed =
+                                            doc.selectFirst("span.status1") != null
+                                        var wordCount = 0.0F
+                                        var lastUpdated = Date()
+                                        doc.select("div.booknav2 > p").forEach { p ->
+                                            val text = p.text()
 
-                                                    // Updated At
-                                                    val matchUpdateAt = regexUpdateAt.matchEntire(text)
-                                                    if (matchUpdateAt != null) {
-                                                        lastUpdated =
-                                                            dateFormat.parse(matchUpdateAt.groupValues[1])
-                                                                ?: Date()
-                                                        return@forEach
-                                                    }
+                                            // Word Count
+                                            val matchWordCounter =
+                                                regexWordCount.matchEntire(text)
+                                            if (matchWordCounter != null) {
+                                                wordCount =
+                                                    matchWordCounter.groupValues[1].toFloat()
+                                                // Multiplier
+                                                when (matchWordCounter.groupValues[2]) {
+                                                    "百" -> wordCount *= 100
+                                                    "千" -> wordCount *= 1000
+                                                    "萬", "万" -> wordCount *= 10000
+                                                    "億", "亿" -> wordCount *= 100000000
                                                 }
-                                                val tags = doc.select("div.tagul a").map { it.text() }
-
-                                                currentStory = Story(
-                                                    id = matchBookUrl.groupValues[1].toInt(),
-                                                    url = url,
-                                                    title = title,
-                                                    imgUrl = imgUrl,
-                                                    genre = genre,
-                                                    author = author,
-                                                    description = description,
-                                                    completed = completed,
-                                                    wordCount = wordCount.toInt(),
-                                                    lastUpdated = lastUpdated,
-                                                    tags = tags,
-                                                )
-                                                return@evaluateJavascript
+                                                return@forEach
                                             }
 
-                                            // Process if chapters URL
-                                            val matchChaptersUrl = regexChapters.find(url)
-                                            if (matchChaptersUrl != null) {
-                                                // Parse chapters
-                                                var i = 1
-                                                doc.select("div#allchapter ul li a").forEach { cLink ->
-                                                    // Parse chapter url
-                                                    val tokens = regexTxt.find(cLink.attr("href"))
-                                                    if (tokens == null) return@forEach
+                                            // Updated At
+                                            val matchUpdateAt =
+                                                regexUpdateAt.matchEntire(text)
+                                            if (matchUpdateAt != null) {
+                                                lastUpdated =
+                                                    dateFormat.parse(matchUpdateAt.groupValues[1])
+                                                        ?: Date()
+                                                return@forEach
+                                            }
+                                        }
+                                        val tags =
+                                            doc.select("div.tagul a").map { it.text() }
 
-                                                    currentChapters.clear()
-                                                    currentChapters.add(Chapter(
+                                        currentStory = Story(
+                                            id = matchBookUrl.groupValues[1].toInt(),
+                                            url = loadedUrl,
+                                            title = title,
+                                            imgUrl = imgUrl,
+                                            genre = genre,
+                                            author = author,
+                                            description = description,
+                                            completed = completed,
+                                            wordCount = wordCount.toInt(),
+                                            lastUpdated = lastUpdated,
+                                            tags = tags,
+                                        )
+                                        return@launch
+                                    }
+
+                                    // Process if chapters URL
+                                    val matchChaptersUrl = regexChapters.find(currentUrl)
+                                    if (matchChaptersUrl != null) {
+                                        // Parse chapters
+                                        var i = 0
+                                        currentChapters.clear()
+
+                                        doc.select("div#allchapter ul li a")
+                                            .forEach { cLink ->
+                                                // Parse chapter url
+                                                val tokens =
+                                                    regexTxt.find(cLink.attr("href"))
+                                                        ?: return@forEach
+                                                currentChapters.add(
+                                                    Chapter(
                                                         id = tokens.groupValues[2].toInt(),
                                                         storyId = currentStory!!.id,
                                                         order = i,
@@ -196,30 +216,81 @@ class MainActivity : ComponentActivity() {
                                                         url = cLink.attr("href"),
                                                         uploadedAt = null,
                                                         content = null
-                                                    ))
-                                                    i++;
+                                                    )
+                                                )
+                                                i++;
+                                            }
+                                        return@launch
+                                    }
+
+                                    // Process if txt URL
+                                    val matchTxtUrl = regexTxt.find(currentUrl)
+                                    if (regexTxt.containsMatchIn(currentUrl)) {
+                                        // Parse chapter page here
+                                        val chapterDate = dateTimeFormat.parse(
+                                            doc.selectFirst("div.txtinfo > span")?.text()!!
+                                        )
+                                        val chapterContent =
+                                            doc.selectFirst("div.txtcontent0")?.text()!!
+                                        val currentChapter =
+                                            currentChapters.find { it.url == currentUrl }!!
+                                        currentChapter.uploadedAt = chapterDate
+                                        currentChapter.content = chapterContent
+
+                                        return@launch
+                                    }
+                                }
+                            }), "AndroidBridge")
+
+                            webViewClient = object : WebViewClient() {
+                                override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                                    return request != null && request.url.host?.contains("twkan.com") == true && super.shouldOverrideUrlLoading(view, request)
+                                }
+
+                                override fun onPageFinished(view: WebView?, url: String?) {
+                                    // Scrap website for story details
+                                    if (url != null) {
+                                        evaluateJavascript("""
+                                            (async function() {
+                                                let mainContainer = document.body.getElementsByClassName('container')[0];
+                                                if (!mainContainer) return;
+                                        
+                                                async function scrape() {
+                                                    if (typeof LoadMore === 'function') {
+                                                        let loadMoreButton = document.body.getElementsByClassName('more-btn')[0];
+                                                        if (loadMoreButton) {
+                                                            await new Promise((resolve) => {
+                                                                let observer = new MutationObserver((mutations, obs) => {
+                                                                    for (const mutation of mutations) {
+                                                                        if (mutation.type !== 'childList') continue;
+                                                                        for (const removedNode of mutation.removedNodes) {
+                                                                            if (removedNode === loadMoreButton || removedNode.contains(loadMoreButton)) {
+                                                                                obs.disconnect();
+                                                                                resolve();
+                                                                                return;
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                });
+                                                                observer.observe(mainContainer, { childList: true, subtree: true });
+                                                                LoadMore();
+                                                                // Fallback timeout in case LoadMore fails
+                                                                setTimeout(resolve, 5000); 
+                                                            });
+                                                        }
+                                                    }
+                                                    AndroidBridge.onContentScraped(mainContainer.outerHTML);
                                                 }
-                                                return@evaluateJavascript
-                                            }
-
-                                            // Process if txt URL
-                                            val matchTxtUrl = regexTxt.find(url)
-                                            if (regexTxt.containsMatchIn(url)) {
-                                                // Parse chapter page here
-                                                val chapterDate = dateTimeFormat.parse(doc.selectFirst("div.txtinfo > span")?.text()!!)
-                                                val chapterContent = doc.selectFirst("div.txtcontent0")?.text()!!
-                                                val currentChapter = currentChapters.find { it.url == url }!!
-                                                currentChapter.uploadedAt = chapterDate
-                                                currentChapter.content = chapterContent
-
-                                                return@evaluateJavascript
-                                            }
-                                        }
+                                                
+                                                scrape();
+                                            })();
+                                        """.trimIndent(), null)
+                                    }
                                     super.onPageFinished(view, url)
                                 }
 
                                 override fun doUpdateVisitedHistory(view: WebView?, urlLocal: String?, isReload: Boolean) {
-                                    url = urlLocal!!
+                                    currentUrl = urlLocal!!
                                     super.doUpdateVisitedHistory(view, urlLocal, isReload)
                                 }
                             }
@@ -236,13 +307,13 @@ class MainActivity : ComponentActivity() {
                             CookieManager.getInstance().setAcceptCookie(true)
                             CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
 
-                            loadUrl(url)
+                            loadUrl(currentUrl)
                         }
                     }
-                    val isScrappableUrl = remember(url) {
-                        regexBook.containsMatchIn(url) ||
-                        regexChapters.containsMatchIn(url) ||
-                        regexTxt.containsMatchIn(url)
+                    val isScrappableUrl = remember(currentUrl) {
+                        regexBook.containsMatchIn(currentUrl) ||
+                        regexChapters.containsMatchIn(currentUrl) ||
+                        regexTxt.containsMatchIn(currentUrl)
                     }
 
                     // Translator
@@ -255,11 +326,11 @@ class MainActivity : ComponentActivity() {
                     // Function
                     val onShowScrapped: (Boolean) -> Unit = {
                         if (it && isScrappableUrl) {
-                            if (regexBook.find(url) != null)
+                            if (regexBook.find(currentUrl) != null)
                                 showStory = true
-                            else if (regexChapters.find(url) != null)
+                            else if (regexChapters.find(currentUrl) != null)
                                 showChapters = true
-                            else if (regexTxt.find(url) != null)
+                            else if (regexTxt.find(currentUrl) != null)
                                 showChapter = true
                         }else{
                             showStories = false
