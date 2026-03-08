@@ -454,7 +454,8 @@ class MainActivity : ComponentActivity() {
                         else if (showChapters)
                             ChapterListView(
                                 chapters = currentChapters,
-                                onClickChapter = onShowChapter
+                                onClickChapter = onShowChapter,
+                                onBackToStoryClick = onShowChapters
                             )
                         else if (showChapter)
                             ChapterView(
