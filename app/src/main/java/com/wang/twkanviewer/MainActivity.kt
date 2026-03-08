@@ -245,15 +245,24 @@ class MainActivity : ComponentActivity() {
                                         val chapterDate = dateTimeFormat.parse(
                                             doc.selectFirst("div.txtinfo > span")?.text()!!
                                         )
-                                        val chapterContent =
-                                            doc.selectFirst("div#txtcontent0")?.text()!!
                                         
+                                        // Preserve newlines from <p> and <br> tags
+                                        val contentElement = doc.selectFirst("div#txtcontent0")
+                                        contentElement?.select("p")?.prepend("\n")
+                                        contentElement?.select("br")?.prepend("\n")
+                                        var chapterContent = contentElement?.text() ?: ""
+
+                                        // Clean
+                                        if (currentChapter != null)
+                                            chapterContent = chapterContent.replaceFirst(currentChapter!!.title, "")
+                                        chapterContent.replace(Regex("[\\s ]*(\n)+[\\s ]*"), "\n")
+
                                         // Update the currentChapter state with a new object to trigger recomposition
                                         currentChapter?.let {
                                             if (it.url == currentUrl) {
                                                 currentChapter = it.copy(
                                                     uploadedAt = chapterDate,
-                                                    content = chapterContent
+                                                    content = chapterContent.trim()
                                                 )
                                             }
                                         }

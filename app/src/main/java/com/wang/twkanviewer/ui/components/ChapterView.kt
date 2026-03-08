@@ -67,13 +67,31 @@ fun ChapterView(
             Spacer(modifier = Modifier.height(16.dp))
             HorizontalDivider(thickness = 1.dp)
             Spacer(modifier = Modifier.height(16.dp))
-            
-            Text(
-                text = chapter.content ?: "Loading content...",
-                fontSize = fontSize.sp,
-                lineHeight = (fontSize * 1.5).sp,
-                modifier = Modifier.fillMaxWidth()
-            )
+
+            val contentChunks = chapter.content?.split(Regex("[\n ]+")) ?: emptyList()
+            println("chunks: " + contentChunks.size)
+            println("chunks pieces: $contentChunks")
+
+            if (contentChunks.isNotEmpty())
+                contentChunks.filter{
+                    it.isNotBlank()
+                }.forEach {
+                    Text(
+                        text = it,
+                        fontSize = fontSize.sp,
+                        lineHeight = (fontSize * 1.5).sp,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp)
+                    )
+                }
+            else
+                Text(
+                    text = "Loading...",
+                    fontSize = fontSize.sp,
+                    lineHeight = (fontSize * 1.5).sp,
+                    modifier = Modifier.fillMaxWidth()
+                )
         }
 
         BottomAppBar {
