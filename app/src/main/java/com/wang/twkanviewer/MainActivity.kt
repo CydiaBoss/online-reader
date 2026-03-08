@@ -54,6 +54,10 @@ import java.util.Locale
 @OptIn(ExperimentalMaterial3Api::class)
 class MainActivity : ComponentActivity() {
 
+    enum class ViewState {
+        BROWSER, STORY, CHAPTER_LIST, CHAPTER
+    }
+
     /**
      * Special Android Web Bridge
      */
@@ -80,13 +84,12 @@ class MainActivity : ComponentActivity() {
                     val dateTimeFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
 
                     // State
+                    val viewHistory = remember { mutableStateListOf<ViewState>() }
+                    var currentViewState by remember { mutableStateOf(ViewState.BROWSER) }
+
                     val currentChapters = remember { mutableStateListOf<Chapter>() }
                     var currentStory: Story? by remember { mutableStateOf(null) }
                     var currentChapter: Chapter? by remember { mutableStateOf(null) }
-                    var showStories by remember { mutableStateOf(false) }
-                    var showStory by remember { mutableStateOf(false) }
-                    var showChapters by remember { mutableStateOf(false) }
-                    var showChapter by remember { mutableStateOf(false) }
                     var showTranslate by remember { mutableStateOf(false) }
                     
                     var chapterFontSize by remember { mutableFloatStateOf(16f) }
@@ -98,6 +101,13 @@ class MainActivity : ComponentActivity() {
 
                     // Coroutine Scope
                     val scope = rememberCoroutineScope()
+
+                    fun navigateTo(state: ViewState) {
+                        if (currentViewState != state) {
+                            viewHistory.add(currentViewState)
+                            currentViewState = state
+                        }
+                    }
 
                     // WebView
                     var currentUrl by remember { mutableStateOf("https://twkan.com") }
@@ -357,45 +367,37 @@ class MainActivity : ComponentActivity() {
                     val onShowScrapped: (Boolean) -> Unit = {
                         if (it && isScrappableUrl) {
                             if (regexBook.find(currentUrl) != null)
-                                showStory = true
+                                navigateTo(ViewState.STORY)
                             else if (regexChapters.find(currentUrl) != null)
-                                showChapters = true
+                                navigateTo(ViewState.CHAPTER_LIST)
                             else if (regexTxt.find(currentUrl) != null)
-                                showChapter = true
+                                navigateTo(ViewState.CHAPTER)
                         }else{
-                            showStories = false
-                            showStory = false
-                            showChapters = false
-                            showTranslate = false
-                            showChapter = false
+                            navigateTo(ViewState.BROWSER)
                         }
                     }
                     val onShowChapters: () -> Unit = {
                         if (currentStory != null) {
+                            val indexUrl = currentStory!!.url.replace(".html", "/index.html")
                             if (currentChapters.isEmpty() || currentChapters.first().storyId != currentStory!!.id) {
                                 // Clear
                                 currentChapters.clear()
-                                // Load Chapters Page
-                                webView.loadUrl(currentStory!!.url.replace(".html", "/index.html"))
                             }
-                            showChapters = true
-                            showStory = false
-                            showStories = false
-                            showChapter = false
+                            // Always sync WebView URL when entering chapter list
+                            webView.loadUrl(indexUrl)
+                            navigateTo(ViewState.CHAPTER_LIST)
                         }
                     }
                     val onBackToStory: () -> Unit = {
-                        showChapters = false
-                        showStory = true
-                        showStories = false
-                        showChapter = false
+                        if (currentStory != null) {
+                            webView.loadUrl(currentStory!!.url)
+                        }
+                        navigateTo(ViewState.STORY)
                     }
                     val onShowChapter: (Chapter) -> Unit = {
                         webView.loadUrl(it.url)
                         currentChapter = it
-                        showChapter = true
-                        showChapters = false
-                        showStory = false
+                        navigateTo(ViewState.CHAPTER)
                     }
                     val onPreviousChapter: () -> Unit = {
                         currentChapter?.let { chapter ->
@@ -448,14 +450,19 @@ class MainActivity : ComponentActivity() {
 
                     // Back Handler
                     BackHandler(enabled = true) {
-                        if (showStories) {
-                            showStories = false
-                        } else if (showStory) {
-                            showStory = false
-                        } else if (showChapters) {
-                            showChapters = false
-                        } else if (showChapter) {
-                            showChapter = false
+                        if (viewHistory.isNotEmpty()) {
+                            val previousState = viewHistory.removeAt(viewHistory.size - 1)
+                            
+                            // SYNC WEBVIEW URL when returning to browser or other screens
+                            if (previousState == ViewState.STORY && currentStory != null) {
+                                webView.loadUrl(currentStory!!.url)
+                            } else if (previousState == ViewState.CHAPTER_LIST && currentStory != null) {
+                                webView.loadUrl(currentStory!!.url.replace(".html", "/index.html"))
+                            } else if (previousState == ViewState.CHAPTER && currentChapter != null) {
+                                webView.loadUrl(currentChapter!!.url)
+                            }
+                            
+                            currentViewState = previousState
                         } else if (webView.canGoBack()) {
                             webView.goBack()
                         } else {
@@ -472,8 +479,9 @@ class MainActivity : ComponentActivity() {
                                 )
                             },
                             actions = {
+                                val isScrappedView = currentViewState != ViewState.BROWSER
                                 IconToggleButton(
-                                    checked = showStory || showChapters || showChapter,
+                                    checked = isScrappedView,
                                     onCheckedChange = onShowScrapped,
                                     enabled = isScrappableUrl && currentStory != null
                                 ) {
@@ -497,31 +505,35 @@ class MainActivity : ComponentActivity() {
                         )
 
                         // Check one of the views
-                        if (showStory)
-                            StoryView(
-                                story = currentStory!!,
-                                onChapterClick = onShowChapters,
-                                onSave = onSave
-                            )
-                        else if (showChapters)
-                            ChapterListView(
-                                chapters = currentChapters,
-                                onClickChapter = onShowChapter,
-                                onBackToStoryClick = onBackToStory
-                            )
-                        else if (showChapter)
-                            currentChapter?.let {
-                                ChapterView(
-                                    chapter = it,
-                                    fontSize = chapterFontSize,
-                                    onFontSizeChange = { newSize -> chapterFontSize = newSize },
-                                    onPreviousClick = onPreviousChapter,
-                                    onNextClick = onNextChapter,
-                                    onBackClick = onShowChapters
+                        when (currentViewState) {
+                            ViewState.STORY -> 
+                                currentStory?.let {
+                                    StoryView(
+                                        story = it,
+                                        onChapterClick = onShowChapters,
+                                        onSave = onSave
+                                    )
+                                }
+                            ViewState.CHAPTER_LIST -> 
+                                ChapterListView(
+                                    chapters = currentChapters,
+                                    onClickChapter = onShowChapter,
+                                    onBackToStoryClick = onBackToStory
                                 )
-                            }
-                        else
-                            BrowserView(webView = webView)
+                            ViewState.CHAPTER -> 
+                                currentChapter?.let {
+                                    ChapterView(
+                                        chapter = it,
+                                        fontSize = chapterFontSize,
+                                        onFontSizeChange = { newSize -> chapterFontSize = newSize },
+                                        onPreviousClick = onPreviousChapter,
+                                        onNextClick = onNextChapter,
+                                        onBackClick = onShowChapters
+                                    )
+                                }
+                            ViewState.BROWSER -> 
+                                BrowserView(webView = webView)
+                        }
                     }
                 }
             }
