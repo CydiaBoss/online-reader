@@ -23,6 +23,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -87,6 +88,8 @@ class MainActivity : ComponentActivity() {
                     var showChapters by remember { mutableStateOf(false) }
                     var showChapter by remember { mutableStateOf(false) }
                     var showTranslate by remember { mutableStateOf(false) }
+                    
+                    var chapterFontSize by remember { mutableFloatStateOf(16f) }
 
                     // Database
                     val db = AppDatabase.getDatabase(this)
@@ -197,29 +200,41 @@ class MainActivity : ComponentActivity() {
                                     // Process if chapters URL
                                     val matchChaptersUrl = regexChapters.find(currentUrl)
                                     if (matchChaptersUrl != null) {
-                                        // Parse chapters
-                                        var i = 0
+                                        // Find Chapters
+                                        val elements = doc.select("div#allchapter ul li a")
+
+                                        // Validate if an update is needed for the list
+                                        if (
+                                            currentChapters.isNotEmpty() &&
+                                            currentChapters.first().storyId == matchChaptersUrl.groupValues[1].toInt() &&
+                                            currentChapters.size == elements.size
+                                        ) {
+                                            return@launch
+                                        }
+
+                                        // Clear
                                         currentChapters.clear()
 
-                                        doc.select("div#allchapter ul li a")
-                                            .forEach { cLink ->
-                                                // Parse chapter url
-                                                val tokens =
-                                                    regexTxt.find(cLink.attr("href"))
-                                                        ?: return@forEach
-                                                currentChapters.add(
-                                                    Chapter(
-                                                        id = tokens.groupValues[2].toInt(),
-                                                        storyId = currentStory!!.id,
-                                                        order = i,
-                                                        title = cLink.text().trim(),
-                                                        url = cLink.attr("href"),
-                                                        uploadedAt = null,
-                                                        content = null
-                                                    )
+                                        // Parse chapters
+                                        var i = 0
+                                        elements.forEach { cLink ->
+                                            // Parse chapter url
+                                            val tokens =
+                                                regexTxt.find(cLink.attr("href"))
+                                                    ?: return@forEach
+                                            currentChapters.add(
+                                                Chapter(
+                                                    id = tokens.groupValues[2].toInt(),
+                                                    storyId = currentStory!!.id,
+                                                    order = i,
+                                                    title = cLink.text().trim(),
+                                                    url = cLink.attr("href"),
+                                                    uploadedAt = null,
+                                                    content = null
                                                 )
-                                                i++;
-                                            }
+                                            )
+                                            i++;
+                                        }
                                         return@launch
                                     }
 
@@ -349,13 +364,22 @@ class MainActivity : ComponentActivity() {
                     val onShowChapters: () -> Unit = {
                         if (currentStory != null) {
                             if (currentChapters.isEmpty() || currentChapters.first().storyId != currentStory!!.id) {
+                                // Clear
+                                currentChapters.clear()
                                 // Load Chapters Page
                                 webView.loadUrl(currentStory!!.url.replace(".html", "/index.html"))
                             }
                             showChapters = true
                             showStory = false
                             showStories = false
+                            showChapter = false
                         }
+                    }
+                    val onBackToStory: () -> Unit = {
+                        showChapters = false
+                        showStory = true
+                        showStories = false
+                        showChapter = false
                     }
                     val onShowChapter: (Chapter) -> Unit = {
                         webView.loadUrl(it.url)
@@ -363,6 +387,22 @@ class MainActivity : ComponentActivity() {
                         showChapter = true
                         showChapters = false
                         showStory = false
+                    }
+                    val onPreviousChapter: () -> Unit = {
+                        currentChapter?.let { chapter ->
+                            val index = currentChapters.indexOfFirst { it.url == chapter.url }
+                            if (index > 0) {
+                                onShowChapter(currentChapters[index - 1])
+                            }
+                        }
+                    }
+                    val onNextChapter: () -> Unit = {
+                        currentChapter?.let { chapter ->
+                            val index = currentChapters.indexOfFirst { it.url == chapter.url }
+                            if (index != -1 && index < currentChapters.size - 1) {
+                                onShowChapter(currentChapters[index + 1])
+                            }
+                        }
                     }
                     val onTranslate: (Boolean) -> Unit = {
                         showTranslate = it
@@ -444,16 +484,6 @@ class MainActivity : ComponentActivity() {
                                         contentDescription = "translator"
                                     )
                                 }
-                                Spacer(Modifier.width(4.dp))
-                                IconButton(
-                                    onClick = onSave,
-                                    enabled = isScrappableUrl && currentStory != null
-                                ) {
-                                    Icon(
-                                        painter = painterResource(id = R.drawable.add_24px),
-                                        contentDescription = "save"
-                                    )
-                                }
                             }
                         )
 
@@ -461,18 +491,24 @@ class MainActivity : ComponentActivity() {
                         if (showStory)
                             StoryView(
                                 story = currentStory!!,
-                                onChapterClick = onShowChapters
+                                onChapterClick = onShowChapters,
+                                onSave = onSave
                             )
                         else if (showChapters)
                             ChapterListView(
                                 chapters = currentChapters,
                                 onClickChapter = onShowChapter,
-                                onBackToStoryClick = onShowChapters
+                                onBackToStoryClick = onBackToStory
                             )
                         else if (showChapter)
                             currentChapter?.let {
                                 ChapterView(
-                                    chapter = it
+                                    chapter = it,
+                                    fontSize = chapterFontSize,
+                                    onFontSizeChange = { newSize -> chapterFontSize = newSize },
+                                    onPreviousClick = onPreviousChapter,
+                                    onNextClick = onNextChapter,
+                                    onBackClick = onShowChapters
                                 )
                             }
                         else
