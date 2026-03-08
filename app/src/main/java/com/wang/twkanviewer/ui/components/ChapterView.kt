@@ -1,6 +1,12 @@
 package com.wang.twkanviewer.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -21,12 +27,18 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.wang.twkanviewer.models.Chapter
+import kotlinx.coroutines.delay
 
 @Composable
 fun ChapterView(
@@ -35,18 +47,53 @@ fun ChapterView(
     onFontSizeChange: (Float) -> Unit,
     onPreviousClick: () -> Unit,
     onNextClick: () -> Unit,
-    onBackClick: () -> Unit
+    onBackClick: () -> Unit,
+    onToggleBars: (Boolean) -> Unit = {}
 ) {
-    Column(
-        modifier = Modifier.fillMaxSize()
+    var showAppBar by remember { mutableStateOf(true) }
+    val scrollState = rememberScrollState()
+    val interactionSource = remember { MutableInteractionSource() }
+
+    // Sync visibility with TopAppBar in MainActivity
+    LaunchedEffect(showAppBar) {
+        onToggleBars(showAppBar)
+    }
+
+    // Auto-hide logic when scrolling starts
+    LaunchedEffect(scrollState.isScrollInProgress) {
+        if (scrollState.isScrollInProgress) {
+            showAppBar = false
+        }
+    }
+
+    // Auto-hide after idle
+    LaunchedEffect(showAppBar) {
+        if (showAppBar) {
+            delay(3000)
+            showAppBar = false
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null
+            ) {
+                showAppBar = !showAppBar
+            }
     ) {
         Column(
             modifier = Modifier
-                .weight(1f)
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
+                .fillMaxSize()
+                .verticalScroll(scrollState)
+                .padding(horizontal = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            // Spacer for TopAppBar overlay
+            Spacer(modifier = Modifier.height(24.dp))
+
             Text(
                 text = chapter.title,
                 style = MaterialTheme.typography.headlineMedium,
@@ -67,63 +114,60 @@ fun ChapterView(
             Spacer(modifier = Modifier.height(16.dp))
             HorizontalDivider(thickness = 1.dp)
             Spacer(modifier = Modifier.height(16.dp))
-
+            
             val contentChunks = chapter.content?.split(Regex("[\n ]+")) ?: emptyList()
-            println("chunks: " + contentChunks.size)
-            println("chunks pieces: $contentChunks")
-
-            if (contentChunks.isNotEmpty())
-                contentChunks.filter{
-                    it.isNotBlank()
-                }.forEach {
-                    Text(
-                        text = it,
-                        fontSize = fontSize.sp,
-                        lineHeight = (fontSize * 1.5).sp,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 8.dp)
-                    )
-                }
-            else
+            contentChunks.filter { it.isNotBlank() }.forEach { paragraph ->
                 Text(
-                    text = "Loading...",
+                    text = paragraph.trim(),
                     fontSize = fontSize.sp,
                     lineHeight = (fontSize * 1.5).sp,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp)
                 )
+            }
+
+            // Spacer for BottomAppBar overlay
+            Spacer(modifier = Modifier.height(64.dp))
         }
 
-        BottomAppBar {
-            IconButton(onClick = onBackClick) {
-                Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Chapter List")
-            }
-            Spacer( modifier = Modifier.weight(1f) )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = onPreviousClick) {
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Previous Chapter")
-                }
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { onFontSizeChange(fontSize - 1f) }) {
-                        Text("A-", style = MaterialTheme.typography.labelLarge)
+        AnimatedVisibility(
+            visible = showAppBar,
+            enter = slideInVertically(initialOffsetY = { it }),
+            exit = slideOutVertically(targetOffsetY = { it }),
+            modifier = Modifier.align(Alignment.BottomCenter)
+        ) {
+            BottomAppBar() {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = onBackClick) {
+                        Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Chapter List")
                     }
-                    Text(
-                        text = fontSize.toInt().toString(),
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.padding(horizontal = 4.dp)
-                    )
-                    IconButton(onClick = { onFontSizeChange(fontSize + 1f) }) {
-                        Text("A+", style = MaterialTheme.typography.labelLarge)
+                    
+                    IconButton(onClick = onPreviousClick) {
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Previous Chapter")
                     }
-                }
 
-                IconButton(onClick = onNextClick) {
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Next Chapter")
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = { onFontSizeChange(fontSize - 1f) }) {
+                            Text("A-", style = MaterialTheme.typography.labelLarge)
+                        }
+                        Text(
+                            text = fontSize.toInt().toString(),
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(horizontal = 4.dp)
+                        )
+                        IconButton(onClick = { onFontSizeChange(fontSize + 1f) }) {
+                            Text("A+", style = MaterialTheme.typography.labelLarge)
+                        }
+                    }
+
+                    IconButton(onClick = onNextClick) {
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Next Chapter")
+                    }
                 }
             }
         }

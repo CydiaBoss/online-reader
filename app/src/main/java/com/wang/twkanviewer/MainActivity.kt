@@ -91,8 +91,10 @@ class MainActivity : ComponentActivity() {
                     var currentStory: Story? by remember { mutableStateOf(null) }
                     var currentChapter: Chapter? by remember { mutableStateOf(null) }
                     var showTranslate by remember { mutableStateOf(false) }
+                    var translatedText by remember { mutableStateOf<String?>(null) }
                     
                     var chapterFontSize by remember { mutableFloatStateOf(16f) }
+                    var showTopBar by remember { mutableStateOf(true) }
 
                     // Database
                     val db = AppDatabase.getDatabase(this)
@@ -265,7 +267,7 @@ class MainActivity : ComponentActivity() {
                                         // Clean
                                         if (currentChapter != null)
                                             chapterContent = chapterContent.replaceFirst(currentChapter!!.title, "")
-                                        chapterContent.replace(Regex("[\\s ]*(\n)+[\\s ]*"), "\n")
+                                        chapterContent.replace(Regex("[\n ]+"), "\n")
 
                                         // Update the currentChapter state with a new object to trigger recomposition
                                         currentChapter?.let {
@@ -357,11 +359,16 @@ class MainActivity : ComponentActivity() {
                     }
 
                     // Translator
-                    val options = TranslatorOptions.Builder()
-                        .setSourceLanguage(TranslateLanguage.CHINESE)
-                        .setTargetLanguage(TranslateLanguage.ENGLISH)
-                        .build()
-                    val translator = Translation.getClient(options)
+                    val targetLanguage = remember {
+                        TranslateLanguage.fromLanguageTag(Locale.getDefault().language) ?: TranslateLanguage.ENGLISH
+                    }
+                    val translator = remember(targetLanguage) {
+                        val options = TranslatorOptions.Builder()
+                            .setSourceLanguage(TranslateLanguage.CHINESE)
+                            .setTargetLanguage(targetLanguage)
+                            .build()
+                        Translation.getClient(options)
+                    }
 
                     // Function
                     val onShowScrapped: (Boolean) -> Unit = {
@@ -397,6 +404,7 @@ class MainActivity : ComponentActivity() {
                     val onShowChapter: (Chapter) -> Unit = {
                         webView.loadUrl(it.url)
                         currentChapter = it
+                        translatedText = null
                         navigateTo(ViewState.CHAPTER)
                     }
                     val onPreviousChapter: () -> Unit = {
@@ -417,24 +425,25 @@ class MainActivity : ComponentActivity() {
                     }
                     val onTranslate: (Boolean) -> Unit = {
                         showTranslate = it
-                        if (it)
-                            webView.evaluateJavascript("(function() { return document.body.innerText; })();") { content ->
-                                translator.downloadModelIfNeeded(
-                                    DownloadConditions.Builder().build()
-                                )
+                        if (it) {
+                            val textToTranslate = when (currentViewState) {
+                                ViewState.CHAPTER -> currentChapter?.content
+                                ViewState.STORY -> currentStory?.description
+                                else -> null
+                            }
+
+                            if (textToTranslate != null) {
+                                translator.downloadModelIfNeeded(DownloadConditions.Builder().build())
                                     .addOnSuccessListener {
-                                        translator.translate(content)
-                                            .addOnSuccessListener { text ->
-                                                // Translate
+                                        translator.translate(textToTranslate)
+                                            .addOnSuccessListener { translated ->
+                                                translatedText = translated
                                             }
-                                            .addOnFailureListener { exception ->
-                                                // Handle translation failure
-                                            }
-                                    }
-                                    .addOnFailureListener { exception ->
-                                        // Handle model download failure
                                     }
                             }
+                        } else {
+                            translatedText = null
+                        }
                     }
                     val onSave: () -> Unit = {
                         scope.launch {
@@ -463,6 +472,7 @@ class MainActivity : ComponentActivity() {
                             }
                             
                             currentViewState = previousState
+                            showTopBar = true // Reset top bar when going back
                         } else if (webView.canGoBack()) {
                             webView.goBack()
                         } else {
@@ -472,44 +482,46 @@ class MainActivity : ComponentActivity() {
 
                     // Layout
                     Column {
-                        TopAppBar(
-                            title = {
-                                Text(
-                                    text = stringResource(id = R.string.app_name)
-                                )
-                            },
-                            actions = {
-                                val isScrappedView = currentViewState != ViewState.BROWSER
-                                IconToggleButton(
-                                    checked = isScrappedView,
-                                    onCheckedChange = onShowScrapped,
-                                    enabled = isScrappableUrl && currentStory != null
-                                ) {
-                                    Icon(
-                                        painter = painterResource(id = R.drawable.scan_24px),
-                                        contentDescription = "scrapper"
+                        if (showTopBar) {
+                            TopAppBar(
+                                title = {
+                                    Text(
+                                        text = stringResource(id = R.string.app_name)
                                     )
+                                },
+                                actions = {
+                                    val isScrappedView = currentViewState != ViewState.BROWSER
+                                    IconToggleButton(
+                                        checked = isScrappedView,
+                                        onCheckedChange = onShowScrapped,
+                                        enabled = isScrappableUrl && currentStory != null
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(id = R.drawable.scan_24px),
+                                            contentDescription = "scrapper"
+                                        )
+                                    }
+                                    Spacer(Modifier.width(4.dp))
+                                    IconToggleButton(
+                                        checked = showTranslate,
+                                        onCheckedChange = onTranslate,
+                                        enabled = isScrappableUrl && currentStory != null && (currentViewState == ViewState.CHAPTER || currentViewState == ViewState.STORY)
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(id = R.drawable.translate_24px),
+                                            contentDescription = "translator"
+                                        )
+                                    }
                                 }
-                                Spacer(Modifier.width(4.dp))
-                                IconToggleButton(
-                                    checked = showTranslate,
-                                    onCheckedChange = onTranslate,
-                                    enabled = isScrappableUrl && currentStory != null
-                                ) {
-                                    Icon(
-                                        painter = painterResource(id = R.drawable.translate_24px),
-                                        contentDescription = "translator"
-                                    )
-                                }
-                            }
-                        )
+                            )
+                        }
 
                         // Check one of the views
                         when (currentViewState) {
                             ViewState.STORY -> 
                                 currentStory?.let {
                                     StoryView(
-                                        story = it,
+                                        story = if (showTranslate && translatedText != null) it.copy(description = translatedText!!) else it,
                                         onChapterClick = onShowChapters,
                                         onSave = onSave
                                     )
@@ -523,12 +535,13 @@ class MainActivity : ComponentActivity() {
                             ViewState.CHAPTER -> 
                                 currentChapter?.let {
                                     ChapterView(
-                                        chapter = it,
+                                        chapter = if (showTranslate && translatedText != null) it.copy(content = translatedText!!) else it,
                                         fontSize = chapterFontSize,
                                         onFontSizeChange = { newSize -> chapterFontSize = newSize },
                                         onPreviousClick = onPreviousChapter,
                                         onNextClick = onNextChapter,
-                                        onBackClick = onShowChapters
+                                        onBackClick = onShowChapters,
+                                        onToggleBars = { visible -> showTopBar = visible }
                                     )
                                 }
                             ViewState.BROWSER -> 
