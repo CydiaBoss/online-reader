@@ -231,11 +231,17 @@ class MainActivity : ComponentActivity() {
                                             doc.selectFirst("div.txtinfo > span")?.text()!!
                                         )
                                         val chapterContent =
-                                            doc.selectFirst("div.txtcontent0")?.text()!!
-                                        val currentChapter =
-                                            currentChapters.find { it.url == currentUrl }!!
-                                        currentChapter.uploadedAt = chapterDate
-                                        currentChapter.content = chapterContent
+                                            doc.selectFirst("div#txtcontent0")?.text()!!
+                                        
+                                        // Update the currentChapter state with a new object to trigger recomposition
+                                        currentChapter?.let {
+                                            if (it.url == currentUrl) {
+                                                currentChapter = it.copy(
+                                                    uploadedAt = chapterDate,
+                                                    content = chapterContent
+                                                )
+                                            }
+                                        }
 
                                         return@launch
                                     }
@@ -342,7 +348,7 @@ class MainActivity : ComponentActivity() {
                     }
                     val onShowChapters: () -> Unit = {
                         if (currentStory != null) {
-                            if (currentChapters.isEmpty()) {
+                            if (currentChapters.isEmpty() || currentChapters.first().storyId != currentStory!!.id) {
                                 // Load Chapters Page
                                 webView.loadUrl(currentStory!!.url.replace(".html", "/index.html"))
                             }
@@ -351,7 +357,13 @@ class MainActivity : ComponentActivity() {
                             showStories = false
                         }
                     }
-                    val onShowChapter: (Chapter) -> Unit = {}
+                    val onShowChapter: (Chapter) -> Unit = {
+                        webView.loadUrl(it.url)
+                        currentChapter = it
+                        showChapter = true
+                        showChapters = false
+                        showStory = false
+                    }
                     val onTranslate: (Boolean) -> Unit = {
                         showTranslate = it
                         if (it)
@@ -458,9 +470,11 @@ class MainActivity : ComponentActivity() {
                                 onBackToStoryClick = onShowChapters
                             )
                         else if (showChapter)
-                            ChapterView(
-                                chapter = currentChapter!!
-                            )
+                            currentChapter?.let {
+                                ChapterView(
+                                    chapter = it
+                                )
+                            }
                         else
                             BrowserView(webView = webView)
                     }
