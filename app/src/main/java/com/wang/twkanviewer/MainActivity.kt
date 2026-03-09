@@ -21,6 +21,7 @@ import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -462,20 +463,33 @@ class MainActivity : ComponentActivity() {
                                             }
                                             ViewState.CHAPTER_LIST -> {
                                                 if (currentChapters.isEmpty()) return@launch
-                                                if (translatedChapters.isNotEmpty() && translatedChapters.size == currentChapters.size && translatedChapters.first().chapterId == currentChapters.first().id) return@launch
-
-                                                translatedChapters.clear()
-                                                val titles = currentChapters.map { chapter ->
-                                                    translator.translate(chapter.title).asDeferred()
-                                                }.awaitAll()
                                                 
-                                                currentChapters.zip(titles).forEach { (chapter, tTitle) ->
-                                                    translatedChapters.add(ChapterLocale(
-                                                        chapterId = chapter.id,
-                                                        language = targetLanguage,
-                                                        title = tTitle,
-                                                        content = null
-                                                    ))
+                                                // Check if we already have some translations or if it's a new story
+                                                val isNewStory = translatedChapters.isEmpty() || 
+                                                                 translatedChapters.firstOrNull()?.chapterId != currentChapters.firstOrNull()?.id
+
+                                                if (isNewStory) {
+                                                    translatedChapters.clear()
+                                                }
+
+                                                currentChapters.forEach { chapter ->
+                                                    // Only translate if not already translated
+                                                    if (translatedChapters.none { it.chapterId == chapter.id }) {
+                                                        scope.launch {
+                                                            try {
+                                                                val tTitle = translator.translate(chapter.title).await()
+                                                                val newLocale = ChapterLocale(
+                                                                    chapterId = chapter.id,
+                                                                    language = targetLanguage,
+                                                                    title = tTitle,
+                                                                    content = null
+                                                                )
+                                                                translatedChapters.add(newLocale)
+                                                            } catch (e: Exception) {
+                                                                e.printStackTrace()
+                                                            }
+                                                        }
+                                                    }
                                                 }
                                             }
                                             ViewState.CHAPTER -> {
@@ -520,7 +534,15 @@ class MainActivity : ComponentActivity() {
                                 chapterDao.insertAll(currentChapters)
                             }
                         }
-                    };
+                    }
+
+                    // This effect will run whenever the view changes. If translation is enabled,
+                    // it will automatically trigger the translation for the new view.
+                    LaunchedEffect(currentViewState, showTranslate, currentStory, currentChapters.size, currentChapter) {
+                        if (showTranslate) {
+                            onTranslate(true)
+                        }
+                    }
 
                     // Back Handler
                     BackHandler(enabled = true) {
@@ -529,15 +551,9 @@ class MainActivity : ComponentActivity() {
                             
                             // SYNC WEBVIEW URL when returning to browser or other screens
                             when (previousState) {
-                                ViewState.STORY if currentStory != null -> {
-                                    webView.loadUrl(currentStory!!.url)
-                                }
-                                ViewState.CHAPTER_LIST if currentStory != null -> {
-                                    webView.loadUrl(currentStory!!.url.replace(".html", "/index.html"))
-                                }
-                                ViewState.CHAPTER if currentChapter != null -> {
-                                    webView.loadUrl(currentChapter!!.url)
-                                }
+                                ViewState.STORY -> currentStory?.let { webView.loadUrl(it.url) }
+                                ViewState.CHAPTER_LIST -> currentStory?.let { webView.loadUrl(it.url.replace(".html", "/index.html")) }
+                                ViewState.CHAPTER -> currentChapter?.let { webView.loadUrl(it.url) }
                                 else -> {}
                             }
                             

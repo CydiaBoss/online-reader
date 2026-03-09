@@ -6,7 +6,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Search
@@ -20,6 +20,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -40,21 +41,16 @@ fun ChapterListView(
 ) {
     var searchQuery by remember { mutableStateOf("") }
     
-    // Create a list of pairs (Chapter, TranslatedTitle?)
-    val displayList = remember(chapters, translatedChapters, showTranslate) {
-        chapters.map { chapter ->
-            val translatedTitle = if (showTranslate) {
-                translatedChapters.find { it.chapterId == chapter.id }?.title
-            } else null
-            chapter to translatedTitle
-        }
-    }
-
-    val filteredList = remember(displayList, searchQuery) {
-        if (searchQuery.isEmpty()) {
-            displayList
-        } else {
-            displayList.filter { (chapter, translated) ->
+    val filteredList by remember(showTranslate, searchQuery) {
+        derivedStateOf {
+            val translationMap = if (showTranslate) {
+                translatedChapters.associateBy { it.chapterId }
+            } else emptyMap()
+            
+            chapters.map { chapter ->
+                chapter to translationMap[chapter.id]?.title
+            }.filter { (chapter, translated) ->
+                searchQuery.isEmpty() || 
                 chapter.title.contains(searchQuery, ignoreCase = true) ||
                 (translated?.contains(searchQuery, ignoreCase = true) == true)
             }
@@ -69,7 +65,7 @@ fun ChapterListView(
                 .weight(1f)
                 .fillMaxWidth()
         ) {
-            itemsIndexed(filteredList) { _, (chapter, translatedTitle) ->
+            items(filteredList) { (chapter, translatedTitle) ->
                 ListItem(
                     headlineContent = {
                         Text(
@@ -89,29 +85,27 @@ fun ChapterListView(
             }
         }
 
-        BottomAppBar(
-            actions = {
-                IconButton(onClick = onBackToStoryClick) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to Story")
-                }
-                TextField(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it },
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(horizontal = 8.dp),
-                    placeholder = { Text("Search chapters...") },
-                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = Color.Transparent,
-                        unfocusedContainerColor = Color.Transparent,
-                        disabledContainerColor = Color.Transparent,
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent,
-                    ),
-                    singleLine = true
-                )
+        BottomAppBar {
+            IconButton(onClick = onBackToStoryClick) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
             }
-        )
+            TextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 8.dp),
+                placeholder = { Text("Search chapters...") },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    disabledContainerColor = Color.Transparent,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                ),
+                singleLine = true
+            )
+        }
     }
 }
