@@ -6,7 +6,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Search
@@ -28,19 +28,36 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.wang.twkanviewer.models.Chapter
+import com.wang.twkanviewer.models.ChapterLocale
 
 @Composable
 fun ChapterListView(
     chapters: List<Chapter>,
+    showTranslate: Boolean = false,
+    translatedChapters: List<ChapterLocale>,
     onBackToStoryClick: () -> Unit,
     onClickChapter: (Chapter) -> Unit
 ) {
     var searchQuery by remember { mutableStateOf("") }
-    val filteredChapters = remember(chapters, searchQuery) {
+    
+    // Create a list of pairs (Chapter, TranslatedTitle?)
+    val displayList = remember(chapters, translatedChapters, showTranslate) {
+        chapters.map { chapter ->
+            val translatedTitle = if (showTranslate) {
+                translatedChapters.find { it.chapterId == chapter.id }?.title
+            } else null
+            chapter to translatedTitle
+        }
+    }
+
+    val filteredList = remember(displayList, searchQuery) {
         if (searchQuery.isEmpty()) {
-            chapters
+            displayList
         } else {
-            chapters.filter { it.title.contains(searchQuery, ignoreCase = true) }
+            displayList.filter { (chapter, translated) ->
+                chapter.title.contains(searchQuery, ignoreCase = true) ||
+                (translated?.contains(searchQuery, ignoreCase = true) == true)
+            }
         }
     }
 
@@ -52,11 +69,11 @@ fun ChapterListView(
                 .weight(1f)
                 .fillMaxWidth()
         ) {
-            items(filteredChapters) { chapter ->
+            itemsIndexed(filteredList) { _, (chapter, translatedTitle) ->
                 ListItem(
                     headlineContent = {
                         Text(
-                            text = chapter.title,
+                            text = translatedTitle ?: chapter.title,
                             style = MaterialTheme.typography.bodyLarge,
                             modifier = Modifier.padding(vertical = 8.dp)
                         )

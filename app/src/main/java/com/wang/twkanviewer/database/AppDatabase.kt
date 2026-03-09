@@ -6,9 +6,16 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import com.wang.twkanviewer.models.Chapter
+import com.wang.twkanviewer.models.ChapterLocale
 import com.wang.twkanviewer.models.Story
+import com.wang.twkanviewer.models.StoryLocale
 
-@Database(entities = [Story::class, Chapter::class], version = 1, exportSchema = false)
+@Database(entities = [
+    Story::class,
+    StoryLocale::class,
+    Chapter::class,
+    ChapterLocale::class
+], version = 1, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
 

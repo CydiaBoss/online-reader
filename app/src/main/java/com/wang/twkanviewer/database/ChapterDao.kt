@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import com.wang.twkanviewer.models.Chapter
+import com.wang.twkanviewer.models.ChapterLocale
 
 @Dao
 interface ChapterDao {
@@ -13,4 +14,10 @@ interface ChapterDao {
 
     @Query("SELECT * FROM chapters WHERE story_id = :storyId ORDER BY 'order' ASC")
     suspend fun getChaptersForStory(storyId: Int): List<Chapter>
+
+    @Query("SELECT * FROM chapters WHERE id = :id")
+    suspend fun getById(id: Int): Chapter?
+
+    @Query("SELECT * FROM chapter_locales WHERE chapter_id = :id AND language = :language")
+    suspend fun getLocaleByChapterId(id: Int, language: String): ChapterLocale?
 }

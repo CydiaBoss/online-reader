@@ -28,16 +28,25 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.wang.twkanviewer.R
 import com.wang.twkanviewer.models.Story
+import com.wang.twkanviewer.models.StoryLocale
 import java.text.SimpleDateFormat
 import java.util.Locale
 
 @Composable
 fun StoryView(
     story: Story,
+    showTranslate: Boolean = false,
+    translatedStory: StoryLocale? = null,
     onChapterClick: () -> Unit,
     onSave: () -> Unit
 ) {
     val dateFormatter = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+
+    // Determine display values based on translation state
+    val displayTitle = if (showTranslate && translatedStory != null) translatedStory.title else story.title
+    val displayGenre = if (showTranslate && translatedStory != null) translatedStory.genre else story.genre
+    val displayDescription = if (showTranslate && translatedStory != null) translatedStory.description else story.description
+    val displayTags = if (showTranslate && translatedStory != null) translatedStory.tags else story.tags.joinToString(", ")
 
     Column(
         modifier = Modifier.fillMaxSize()
@@ -49,9 +58,10 @@ fun StoryView(
                 .padding(horizontal = 16.dp)
         ) {
             Text(
-                text = story.title,
+                text = displayTitle,
                 fontSize = 20.sp,
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
             )
             Text(text = story.author)
             Spacer(modifier = Modifier.height(10.dp))
@@ -60,7 +70,7 @@ fun StoryView(
                     .data(story.imgUrl)
                     .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 10; SM-G975F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.198 Mobile Safari/537.36")
                     .build(),
-                contentDescription = story.title,
+                contentDescription = displayTitle,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(200.dp)
@@ -72,16 +82,11 @@ fun StoryView(
             Spacer(modifier = Modifier.height(10.dp))
             Text(text = "Last Updated: " + dateFormatter.format(story.lastUpdated))
             Spacer(modifier = Modifier.height(10.dp))
-            Text(text = "Genre: " + story.genre)
+            Text(text = "Genre: $displayGenre")
             Spacer(modifier = Modifier.height(10.dp))
-            Text(text = story.description)
+            Text(text = displayDescription)
             Spacer(modifier = Modifier.height(10.dp))
-            Row() {
-                Text(text = "Tags: ")
-                for (tag in story.tags) {
-                    Text(text = "$tag ")
-                }
-            }
+            Text(text = "Tags: $displayTags")
             Spacer(modifier = Modifier.height(10.dp))
         }
         BottomAppBar(

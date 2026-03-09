@@ -18,9 +18,9 @@ import java.util.Date
     ]
 )
 data class ChapterLocale(
-    @PrimaryKey val id: Int,
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
     @ColumnInfo(name = "chapter_id") val chapterId: Int,
     @ColumnInfo(name = "language") val language: String,
-    @ColumnInfo(name = "title") val title: String,
+    @ColumnInfo(name = "title") var title: String,
     @ColumnInfo(name = "content") var content: String?,
 )

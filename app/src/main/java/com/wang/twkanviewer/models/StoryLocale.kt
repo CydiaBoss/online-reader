@@ -19,11 +19,11 @@ import java.util.Date
     ]
 )
 data class StoryLocale(
-    @PrimaryKey val id: Int,
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
     @ColumnInfo(name = "story_id") val storyId: Int,
     @ColumnInfo(name = "language") val language: String,
     @ColumnInfo(name = "title") val title: String,
     @ColumnInfo(name = "genre") val genre: String,
     @ColumnInfo(name = "description") val description: String,
-    @ColumnInfo(name = "tags") val tags: List<String>
+    @ColumnInfo(name = "tags") val tags: String
 )

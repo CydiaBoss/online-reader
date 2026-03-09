@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -40,13 +39,19 @@ import com.google.mlkit.nl.translate.Translation
 import com.google.mlkit.nl.translate.TranslatorOptions
 import com.wang.twkanviewer.database.AppDatabase
 import com.wang.twkanviewer.models.Chapter
+import com.wang.twkanviewer.models.ChapterLocale
 import com.wang.twkanviewer.models.Story
+import com.wang.twkanviewer.models.StoryLocale
 import com.wang.twkanviewer.ui.components.BrowserView
 import com.wang.twkanviewer.ui.components.ChapterListView
 import com.wang.twkanviewer.ui.components.ChapterView
 import com.wang.twkanviewer.ui.components.StoryView
 import com.wang.twkanviewer.ui.theme.TWKANViewerTheme
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.tasks.asDeferred
+import kotlinx.coroutines.tasks.await
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -63,9 +68,7 @@ class MainActivity : ComponentActivity() {
      */
     class WebAppInterface(private val onResult: (String) -> Unit) {
         @android.webkit.JavascriptInterface
-        fun onContentScraped(html: String) {
-            onResult(html)
-        }
+        fun onContentScraped(html: String) { onResult(html) }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -84,17 +87,20 @@ class MainActivity : ComponentActivity() {
                     val dateTimeFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
 
                     // State
+                    var showTopBar by remember { mutableStateOf(true) }
                     val viewHistory = remember { mutableStateListOf<ViewState>() }
                     var currentViewState by remember { mutableStateOf(ViewState.BROWSER) }
-
                     val currentChapters = remember { mutableStateListOf<Chapter>() }
-                    var currentStory: Story? by remember { mutableStateOf(null) }
-                    var currentChapter: Chapter? by remember { mutableStateOf(null) }
+                    var currentStory by remember { mutableStateOf<Story?>(null) }
+                    var currentChapter by remember { mutableStateOf<Chapter?>(null) }
+
+                    // Translation
                     var showTranslate by remember { mutableStateOf(false) }
-                    var translatedText by remember { mutableStateOf<String?>(null) }
-                    
+                    var translatedStory by remember { mutableStateOf<StoryLocale?>(null) }
+                    val translatedChapters = remember { mutableStateListOf<ChapterLocale>() }
+
+                    // Settings
                     var chapterFontSize by remember { mutableFloatStateOf(16f) }
-                    var showTopBar by remember { mutableStateOf(true) }
 
                     // Database
                     val db = AppDatabase.getDatabase(this)
@@ -122,7 +128,7 @@ class MainActivity : ComponentActivity() {
                             )
 
                             // Link to Android Bridge
-                            addJavascriptInterface(WebAppInterface({ content ->
+                            addJavascriptInterface(WebAppInterface { content ->
                                 // Help with bg js thread
                                 scope.launch {
                                     // Validate url
@@ -257,16 +263,18 @@ class MainActivity : ComponentActivity() {
                                         val chapterDate = dateTimeFormat.parse(
                                             doc.selectFirst("div.txtinfo > span")?.text()!!
                                         )
-                                        
+
                                         // Preserve newlines from <p> and <br> tags
                                         val contentElement = doc.selectFirst("div#txtcontent0")
-                                        contentElement?.select("p")?.prepend("\n")
                                         contentElement?.select("br")?.prepend("\n")
                                         var chapterContent = contentElement?.text() ?: ""
 
                                         // Clean
                                         if (currentChapter != null)
-                                            chapterContent = chapterContent.replaceFirst(currentChapter!!.title, "")
+                                            chapterContent = chapterContent.replaceFirst(
+                                                currentChapter!!.title,
+                                                ""
+                                            )
                                         chapterContent.replace(Regex("[\n ]+"), "\n")
 
                                         // Update the currentChapter state with a new object to trigger recomposition
@@ -282,7 +290,7 @@ class MainActivity : ComponentActivity() {
                                         return@launch
                                     }
                                 }
-                            }), "AndroidBridge")
+                            }, "AndroidBridge")
 
                             webViewClient = object : WebViewClient() {
                                 override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
@@ -404,7 +412,6 @@ class MainActivity : ComponentActivity() {
                     val onShowChapter: (Chapter) -> Unit = {
                         webView.loadUrl(it.url)
                         currentChapter = it
-                        translatedText = null
                         navigateTo(ViewState.CHAPTER)
                     }
                     val onPreviousChapter: () -> Unit = {
@@ -423,26 +430,84 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     }
-                    val onTranslate: (Boolean) -> Unit = {
-                        showTranslate = it
-                        if (it) {
-                            val textToTranslate = when (currentViewState) {
-                                ViewState.CHAPTER -> currentChapter?.content
-                                ViewState.STORY -> currentStory?.description
-                                else -> null
-                            }
+                    val onTranslate: (Boolean) -> Unit = { enabled ->
+                        showTranslate = enabled
+                        if (enabled) {
+                            translator.downloadModelIfNeeded(DownloadConditions.Builder().build())
+                                .addOnSuccessListener {
+                                    scope.launch {
+                                    try {
+                                        // Check what to translate
+                                        when (currentViewState) {
+                                            ViewState.STORY -> {
+                                                val story = currentStory ?: return@launch
+                                                if (translatedStory?.storyId == story.id) return@launch
 
-                            if (textToTranslate != null) {
-                                translator.downloadModelIfNeeded(DownloadConditions.Builder().build())
-                                    .addOnSuccessListener {
-                                        translator.translate(textToTranslate)
-                                            .addOnSuccessListener { translated ->
-                                                translatedText = translated
+                                                val titleDeferred = translator.translate(story.title).asDeferred()
+                                                val genreDeferred = translator.translate(story.genre).asDeferred()
+                                                val descDeferred = translator.translate(story.description).asDeferred()
+                                                val tagsDeferred = async {
+                                                    if (story.tags.isEmpty()) ""
+                                                    else translator.translate(story.tags.joinToString(", ")).await()
+                                                }
+
+                                                translatedStory = StoryLocale(
+                                                    storyId = story.id,
+                                                    language = targetLanguage,
+                                                    title = titleDeferred.await(),
+                                                    genre = genreDeferred.await(),
+                                                    description = descDeferred.await(),
+                                                    tags = tagsDeferred.await()
+                                                )
                                             }
+                                            ViewState.CHAPTER_LIST -> {
+                                                if (currentChapters.isEmpty()) return@launch
+                                                if (translatedChapters.isNotEmpty() && translatedChapters.size == currentChapters.size && translatedChapters.first().chapterId == currentChapters.first().id) return@launch
+
+                                                translatedChapters.clear()
+                                                val titles = currentChapters.map { chapter ->
+                                                    translator.translate(chapter.title).asDeferred()
+                                                }.awaitAll()
+                                                
+                                                currentChapters.zip(titles).forEach { (chapter, tTitle) ->
+                                                    translatedChapters.add(ChapterLocale(
+                                                        chapterId = chapter.id,
+                                                        language = targetLanguage,
+                                                        title = tTitle,
+                                                        content = null
+                                                    ))
+                                                }
+                                            }
+                                            ViewState.CHAPTER -> {
+                                                val chapter = currentChapter ?: return@launch
+                                                
+                                                val titleDef = translator.translate(chapter.title).asDeferred()
+                                                val contentDef = async {
+                                                    val content = chapter.content ?: ""
+                                                    if (content.isBlank()) "" else translator.translate(content).await()
+                                                }
+
+                                                val newTranslatedChapter = ChapterLocale(
+                                                    chapterId = chapter.id,
+                                                    language = targetLanguage,
+                                                    title = titleDef.await(),
+                                                    content = contentDef.await()
+                                                )
+
+                                                val existingIndex = translatedChapters.indexOfFirst { it.chapterId == chapter.id }
+                                                if (existingIndex != -1) {
+                                                    translatedChapters[existingIndex] = newTranslatedChapter
+                                                } else {
+                                                    translatedChapters.add(newTranslatedChapter)
+                                                }
+                                            }
+                                            else -> {}
+                                        }
+                                    } catch (e: Exception) {
+                                        e.printStackTrace()
                                     }
+                                }
                             }
-                        } else {
-                            translatedText = null
                         }
                     }
                     val onSave: () -> Unit = {
@@ -463,12 +528,17 @@ class MainActivity : ComponentActivity() {
                             val previousState = viewHistory.removeAt(viewHistory.size - 1)
                             
                             // SYNC WEBVIEW URL when returning to browser or other screens
-                            if (previousState == ViewState.STORY && currentStory != null) {
-                                webView.loadUrl(currentStory!!.url)
-                            } else if (previousState == ViewState.CHAPTER_LIST && currentStory != null) {
-                                webView.loadUrl(currentStory!!.url.replace(".html", "/index.html"))
-                            } else if (previousState == ViewState.CHAPTER && currentChapter != null) {
-                                webView.loadUrl(currentChapter!!.url)
+                            when (previousState) {
+                                ViewState.STORY if currentStory != null -> {
+                                    webView.loadUrl(currentStory!!.url)
+                                }
+                                ViewState.CHAPTER_LIST if currentStory != null -> {
+                                    webView.loadUrl(currentStory!!.url.replace(".html", "/index.html"))
+                                }
+                                ViewState.CHAPTER if currentChapter != null -> {
+                                    webView.loadUrl(currentChapter!!.url)
+                                }
+                                else -> {}
                             }
                             
                             currentViewState = previousState
@@ -505,7 +575,7 @@ class MainActivity : ComponentActivity() {
                                     IconToggleButton(
                                         checked = showTranslate,
                                         onCheckedChange = onTranslate,
-                                        enabled = isScrappableUrl && currentStory != null && (currentViewState == ViewState.CHAPTER || currentViewState == ViewState.STORY)
+                                        enabled = isScrappableUrl && currentStory != null && currentViewState != ViewState.BROWSER
                                     ) {
                                         Icon(
                                             painter = painterResource(id = R.drawable.translate_24px),
@@ -521,7 +591,9 @@ class MainActivity : ComponentActivity() {
                             ViewState.STORY -> 
                                 currentStory?.let {
                                     StoryView(
-                                        story = if (showTranslate && translatedText != null) it.copy(description = translatedText!!) else it,
+                                        story = it,
+                                        showTranslate = showTranslate,
+                                        translatedStory = translatedStory,
                                         onChapterClick = onShowChapters,
                                         onSave = onSave
                                     )
@@ -529,13 +601,17 @@ class MainActivity : ComponentActivity() {
                             ViewState.CHAPTER_LIST -> 
                                 ChapterListView(
                                     chapters = currentChapters,
+                                    showTranslate = showTranslate,
+                                    translatedChapters = translatedChapters,
                                     onClickChapter = onShowChapter,
                                     onBackToStoryClick = onBackToStory
                                 )
                             ViewState.CHAPTER -> 
                                 currentChapter?.let {
                                     ChapterView(
-                                        chapter = if (showTranslate && translatedText != null) it.copy(content = translatedText!!) else it,
+                                        chapter = it,
+                                        showTranslate = showTranslate,
+                                        translatedChapter = translatedChapters.find { tChap -> tChap.chapterId == it.id },
                                         fontSize = chapterFontSize,
                                         onFontSizeChange = { newSize -> chapterFontSize = newSize },
                                         onPreviousClick = onPreviousChapter,

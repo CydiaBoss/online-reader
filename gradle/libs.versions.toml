@@ -14,6 +14,7 @@ coilCompose = "2.7.0"
 ksoup = "0.2.6"
 room = "2.7.0-alpha11"
 ksp = "2.1.0-1.0.29"
+kotlinxCoroutinesPlayServices = "1.10.2"
 
 [libraries]
 androidx-browser = { module = "androidx.browser:browser", version = "1.9.0" }
@@ -38,6 +39,7 @@ ksoup = { group = "com.fleeksoft.ksoup", name = "ksoup", version.ref = "ksoup" }
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
+kotlinx-coroutines-play-services = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-play-services", version.ref = "kotlinxCoroutinesPlayServices" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

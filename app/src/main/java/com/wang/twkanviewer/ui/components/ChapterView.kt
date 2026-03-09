@@ -38,11 +38,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.wang.twkanviewer.models.Chapter
+import com.wang.twkanviewer.models.ChapterLocale
 import kotlinx.coroutines.delay
 
 @Composable
 fun ChapterView(
     chapter: Chapter,
+    showTranslate: Boolean = false,
+    translatedChapter: ChapterLocale? = null,
     fontSize: Float,
     onFontSizeChange: (Float) -> Unit,
     onPreviousClick: () -> Unit,
@@ -74,6 +77,10 @@ fun ChapterView(
         }
     }
 
+    // Determine what text to display
+    val displayTitle = if (showTranslate && translatedChapter != null) translatedChapter.title else chapter.title
+    val displayContent = if (showTranslate && translatedChapter != null) translatedChapter.content else chapter.content
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -95,7 +102,7 @@ fun ChapterView(
             Spacer(modifier = Modifier.height(24.dp))
 
             Text(
-                text = chapter.title,
+                text = displayTitle,
                 style = MaterialTheme.typography.headlineMedium,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth()
@@ -115,7 +122,7 @@ fun ChapterView(
             HorizontalDivider(thickness = 1.dp)
             Spacer(modifier = Modifier.height(16.dp))
             
-            val contentChunks = chapter.content?.split(Regex("[\n ]+")) ?: emptyList()
+            val contentChunks = displayContent?.split(Regex("[\n ]+")) ?: emptyList()
             contentChunks.filter { it.isNotBlank() }.forEach { paragraph ->
                 Text(
                     text = paragraph.trim(),
