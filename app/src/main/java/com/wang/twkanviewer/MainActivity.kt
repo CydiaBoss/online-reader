@@ -15,9 +15,11 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -47,11 +49,11 @@ import com.wang.twkanviewer.models.StoryLocale
 import com.wang.twkanviewer.ui.components.BrowserView
 import com.wang.twkanviewer.ui.components.ChapterListView
 import com.wang.twkanviewer.ui.components.ChapterView
+import com.wang.twkanviewer.ui.components.StoryListView
 import com.wang.twkanviewer.ui.components.StoryView
 import com.wang.twkanviewer.ui.theme.TWKANViewerTheme
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.tasks.asDeferred
 import kotlinx.coroutines.tasks.await
 import java.text.SimpleDateFormat
@@ -62,7 +64,7 @@ import java.util.Locale
 class MainActivity : ComponentActivity() {
 
     enum class ViewState {
-        BROWSER, STORY, CHAPTER_LIST, CHAPTER
+        BROWSER, STORY, CHAPTER_LIST, CHAPTER, STORY_LIST
     }
 
     /**
@@ -94,16 +96,19 @@ class MainActivity : ComponentActivity() {
                     val currentChapters = remember { mutableStateListOf<Chapter>() }
                     var currentStory by remember { mutableStateOf<Story?>(null) }
                     var currentChapter by remember { mutableStateOf<Chapter?>(null) }
+                    val allStories = remember { mutableStateListOf<Story>() }
 
                     // Translation
                     var showTranslate by remember { mutableStateOf(false) }
                     var translatedStory by remember { mutableStateOf<StoryLocale?>(null) }
                     val translatedChapters = remember { mutableStateListOf<ChapterLocale>() }
+                    val allTranslatedStories = remember { mutableStateListOf<StoryLocale>() }
                     
                     // Tracking state to avoid duplicate concurrent translations
                     val translatingIds = remember { mutableSetOf<Int>() }
                     var isStoryTranslating by remember { mutableStateOf(false) }
                     var isListTranslating by remember { mutableStateOf(false) }
+                    var isLibraryTranslating by remember { mutableStateOf(false) }
 
                     // Settings
                     var chapterFontSize by remember { mutableFloatStateOf(16f) }
@@ -256,13 +261,12 @@ class MainActivity : ComponentActivity() {
                                                     content = emptyList()
                                                 )
                                             )
-                                            i++;
+                                            i++
                                         }
                                         return@launch
                                     }
 
                                     // Process if txt URL
-                                    val matchTxtUrl = regexTxt.find(currentUrl)
                                     if (regexTxt.containsMatchIn(currentUrl)) {
                                         // Parse chapter page here
                                         val chapterDate = dateTimeFormat.parse(
@@ -290,7 +294,12 @@ class MainActivity : ComponentActivity() {
 
                             webViewClient = object : WebViewClient() {
                                 override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-                                    return request != null && request.url.host?.contains("twkan.com") == true && super.shouldOverrideUrlLoading(view, request)
+                                    val url = request?.url ?: return false
+                                    return if (url.host?.contains("twkan.com") == true) {
+                                        false // Allow loading
+                                    } else {
+                                        true // Block loading
+                                    }
                                 }
 
                                 override fun onPageFinished(view: WebView?, url: String?) {
@@ -424,6 +433,26 @@ class MainActivity : ComponentActivity() {
                             if (index != -1 && index < currentChapters.size - 1) {
                                 onShowChapter(currentChapters[index + 1])
                             }
+                        }
+                    }
+                    val onShowLibrary: () -> Unit = {
+                        scope.launch {
+                            allStories.clear()
+                            allStories.addAll(storyDao.getAll())
+                            allTranslatedStories.clear()
+                            allStories.forEach { story ->
+                                storyDao.getLocaleByStoryId(story.id, targetLanguage)?.let {
+                                    allTranslatedStories.add(it)
+                                }
+                            }
+                            navigateTo(ViewState.STORY_LIST)
+                        }
+                    }
+                    val onDeleteStory: (Story) -> Unit = { story ->
+                        scope.launch {
+                            storyDao.delete(story)
+                            allStories.remove(story)
+                            allTranslatedStories.removeAll { it.storyId == story.id }
                         }
                     }
                     val onTranslate: (Boolean) -> Unit = { enabled ->
@@ -615,7 +644,50 @@ class MainActivity : ComponentActivity() {
                                                     }
                                                 }
                                             }
-                                            else -> {}
+                                            ViewState.STORY_LIST -> {
+                                                if (isLibraryTranslating) return@launch
+                                                isLibraryTranslating = true
+                                                try {
+                                                    allStories.forEach { story ->
+                                                        if (allTranslatedStories.none { it.storyId == story.id }) {
+                                                            scope.launch {
+                                                                try {
+                                                                    // Check DB first
+                                                                    val existing = storyDao.getLocaleByStoryId(story.id, targetLanguage)
+                                                                    if (existing != null) {
+                                                                        allTranslatedStories.add(existing)
+                                                                    } else {
+                                                                        // Translate story details
+                                                                        val titleDef = translator.translate(story.title).asDeferred()
+                                                                        val genreDef = translator.translate(story.genre).asDeferred()
+                                                                        val descDef = translator.translate(story.description).asDeferred()
+                                                                        val tagsDef = async {
+                                                                            if (story.tags.isEmpty()) ""
+                                                                            else translator.translate(story.tags.joinToString(", ")).await()
+                                                                        }
+
+                                                                        val newLocale = StoryLocale(
+                                                                            storyId = story.id,
+                                                                            language = targetLanguage,
+                                                                            title = titleDef.await(),
+                                                                            genre = genreDef.await(),
+                                                                            description = descDef.await(),
+                                                                            tags = tagsDef.await()
+                                                                        )
+                                                                        allTranslatedStories.add(newLocale)
+                                                                        storyDao.insertLocale(newLocale)
+                                                                    }
+                                                                } catch (e: Exception) {
+                                                                    Log.e("Translate", "Error translating story in library", e)
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                } finally {
+                                                    isLibraryTranslating = false
+                                                }
+                                            }
+                                            ViewState.BROWSER -> {}
                                         }
                                     } catch (e: Exception) {
                                         Log.e("Translate", "Error in onTranslate", e)
@@ -658,6 +730,7 @@ class MainActivity : ComponentActivity() {
 
                     // Back Handler
                     BackHandler(enabled = true) {
+                        showTopBar = true
                         when(currentViewState) {
                             ViewState.BROWSER -> {
                                 if (webView.canGoBack()) webView.goBack()
@@ -672,6 +745,7 @@ class MainActivity : ComponentActivity() {
                                 currentViewState = ViewState.CHAPTER_LIST
                                 webView.goBack()
                             }
+                            ViewState.STORY_LIST -> currentViewState = ViewState.BROWSER
                         }
                     }
 
@@ -685,7 +759,14 @@ class MainActivity : ComponentActivity() {
                                     )
                                 },
                                 actions = {
-                                    val isScrappedView = currentViewState != ViewState.BROWSER
+                                    IconButton(onClick = onShowLibrary) {
+                                        Icon(
+                                            painter = painterResource(id = R.drawable.twkan_icon_foreground),
+                                            contentDescription = "Library",
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                    }
+                                    val isScrappedView = currentViewState != ViewState.BROWSER && currentViewState != ViewState.STORY_LIST
                                     IconToggleButton(
                                         checked = isScrappedView,
                                         onCheckedChange = onShowScrapped,
@@ -700,7 +781,7 @@ class MainActivity : ComponentActivity() {
                                     IconToggleButton(
                                         checked = showTranslate,
                                         onCheckedChange = onTranslate,
-                                        enabled = isScrappableUrl && currentStory != null && currentViewState != ViewState.BROWSER
+                                        enabled = currentViewState != ViewState.BROWSER && (currentViewState == ViewState.STORY_LIST || (isScrappableUrl && currentStory != null))
                                     ) {
                                         Icon(
                                             painter = painterResource(id = R.drawable.translate_24px),
@@ -745,6 +826,19 @@ class MainActivity : ComponentActivity() {
                                         onToggleBars = { visible -> showTopBar = visible }
                                     )
                                 }
+                            ViewState.STORY_LIST ->
+                                StoryListView(
+                                    stories = allStories,
+                                    showTranslate = showTranslate,
+                                    translatedStories = allTranslatedStories,
+                                    onBackClick = { currentViewState = ViewState.BROWSER },
+                                    onStoryClick = { story ->
+                                        currentStory = story
+                                        webView.loadUrl(story.url)
+                                        currentViewState = ViewState.STORY
+                                    },
+                                    onDeleteStory = onDeleteStory
+                                )
                             ViewState.BROWSER -> 
                                 BrowserView(webView = webView)
                         }

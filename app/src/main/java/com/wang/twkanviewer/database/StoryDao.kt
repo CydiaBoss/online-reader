@@ -1,6 +1,7 @@
 package com.wang.twkanviewer.database
 
 import androidx.room.Dao
+import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
@@ -23,4 +24,7 @@ interface StoryDao {
 
     @Query("SELECT * FROM story_locales WHERE story_id = :id AND language = :language")
     suspend fun getLocaleByStoryId(id: Int, language: String): StoryLocale?
+
+    @Delete
+    suspend fun delete(story: Story)
 }
