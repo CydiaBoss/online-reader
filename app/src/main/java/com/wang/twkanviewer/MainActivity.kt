@@ -90,7 +90,6 @@ class MainActivity : ComponentActivity() {
 
                     // State
                     var showTopBar by remember { mutableStateOf(true) }
-                    val viewHistory = remember { mutableStateListOf<ViewState>() }
                     var currentViewState by remember { mutableStateOf(ViewState.BROWSER) }
                     val currentChapters = remember { mutableStateListOf<Chapter>() }
                     var currentStory by remember { mutableStateOf<Story?>(null) }
@@ -119,7 +118,6 @@ class MainActivity : ComponentActivity() {
 
                     fun navigateTo(state: ViewState) {
                         if (currentViewState != state) {
-                            viewHistory.add(currentViewState)
                             currentViewState = state
                         }
                     }
@@ -660,23 +658,20 @@ class MainActivity : ComponentActivity() {
 
                     // Back Handler
                     BackHandler(enabled = true) {
-                        if (viewHistory.isNotEmpty()) {
-                            val previousState = viewHistory.removeAt(viewHistory.size - 1)
-                            
-                            // SYNC WEBVIEW URL when returning to browser or other screens
-                            when (previousState) {
-                                ViewState.STORY -> currentStory?.let { story -> webView.loadUrl(story.url) }
-                                ViewState.CHAPTER_LIST -> currentStory?.let { story -> webView.loadUrl(story.url.replace(".html", "/index.html")) }
-                                ViewState.CHAPTER -> currentChapter?.let { chapter -> webView.loadUrl(chapter.url) }
-                                else -> {}
+                        when(currentViewState) {
+                            ViewState.BROWSER -> {
+                                if (webView.canGoBack()) webView.goBack()
+                                else finish()
                             }
-                            
-                            currentViewState = previousState
-                            showTopBar = true // Reset top bar when going back
-                        } else if (webView.canGoBack()) {
-                            webView.goBack()
-                        } else {
-                            finish()
+                            ViewState.STORY -> currentViewState = ViewState.BROWSER
+                            ViewState.CHAPTER_LIST -> {
+                                currentViewState = ViewState.STORY
+                                webView.goBack()
+                            }
+                            ViewState.CHAPTER -> {
+                                currentViewState = ViewState.CHAPTER_LIST
+                                webView.goBack()
+                            }
                         }
                     }
 
