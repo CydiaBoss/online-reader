@@ -3,11 +3,13 @@ package com.wang.twkanviewer.models
 import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
+import androidx.room.Index
 import androidx.room.PrimaryKey
 import java.util.Date
 
 @Entity(
     tableName = "chapter_locales",
+    indices = [Index(value = ["chapter_id", "language"], unique = true)],
     foreignKeys = [
         ForeignKey(
             entity = Chapter::class,
@@ -22,5 +24,5 @@ data class ChapterLocale(
     @ColumnInfo(name = "chapter_id") val chapterId: Int,
     @ColumnInfo(name = "language") val language: String,
     @ColumnInfo(name = "title") var title: String,
-    @ColumnInfo(name = "content") var content: String?,
+    @ColumnInfo(name = "content") var content: List<String>,
 )

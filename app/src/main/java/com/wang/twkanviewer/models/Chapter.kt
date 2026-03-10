@@ -23,6 +23,6 @@ data class Chapter(
     @ColumnInfo(name = "order") val order: Int,
     @ColumnInfo(name = "url") val url: String,
     @ColumnInfo(name = "uploaded_at") var uploadedAt: Date?,
-    @ColumnInfo(name = "content") var content: String?,
+    @ColumnInfo(name = "content") var content: List<String>,
     @ColumnInfo(name = "story_id") var storyId: Int = 0
 )

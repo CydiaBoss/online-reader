@@ -77,9 +77,13 @@ fun ChapterView(
         }
     }
 
-    // Determine what text to display
-    val displayTitle = if (showTranslate && translatedChapter != null) translatedChapter.title else chapter.title
-    val displayContent = if (showTranslate && translatedChapter != null) translatedChapter.content else chapter.content
+    // Determine what text to display. Fallback to original text if translation content is missing or empty.
+    val isTranslatedAvailable = showTranslate && translatedChapter != null
+    val displayTitle = if (isTranslatedAvailable) translatedChapter!!.title else chapter.title
+    val paragraphs = if (isTranslatedAvailable && translatedChapter!!.content.isNotEmpty()) 
+        translatedChapter!!.content 
+    else 
+        chapter.content
 
     Box(
         modifier = Modifier
@@ -122,16 +126,17 @@ fun ChapterView(
             HorizontalDivider(thickness = 1.dp)
             Spacer(modifier = Modifier.height(16.dp))
             
-            val contentChunks = displayContent?.split(Regex("[\n ]+")) ?: emptyList()
-            contentChunks.filter { it.isNotBlank() }.forEach { paragraph ->
-                Text(
-                    text = paragraph.trim(),
-                    fontSize = fontSize.sp,
-                    lineHeight = (fontSize * 1.5).sp,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 12.dp)
-                )
+            paragraphs?.forEach { paragraph ->
+                if (paragraph.isNotBlank()) {
+                    Text(
+                        text = paragraph.trim(),
+                        fontSize = fontSize.sp,
+                        lineHeight = (fontSize * 1.5).sp,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 12.dp)
+                    )
+                }
             }
 
             // Spacer for BottomAppBar overlay

@@ -12,6 +12,9 @@ interface StoryDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(story: Story)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertLocale(locale: StoryLocale)
+
     @Query("SELECT * FROM stories")
     suspend fun getAll(): List<Story>
 
