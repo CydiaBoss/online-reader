@@ -15,12 +15,15 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconToggleButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -105,10 +108,13 @@ class MainActivity : ComponentActivity() {
                     val allTranslatedStories = remember { mutableStateListOf<StoryLocale>() }
                     
                     // Tracking state to avoid duplicate concurrent translations
-                    val translatingIds = remember { mutableSetOf<Int>() }
+                    val translatingIds = remember { mutableStateListOf<Int>() }
                     var isStoryTranslating by remember { mutableStateOf(false) }
                     var isListTranslating by remember { mutableStateOf(false) }
                     var isLibraryTranslating by remember { mutableStateOf(false) }
+                    var isModelDownloading by remember { mutableStateOf(false) }
+
+                    val isAnyTranslationActive = isStoryTranslating || isListTranslating || isLibraryTranslating || translatingIds.isNotEmpty() || isModelDownloading
 
                     // Settings
                     var chapterFontSize by remember { mutableFloatStateOf(16f) }
@@ -458,8 +464,10 @@ class MainActivity : ComponentActivity() {
                     val onTranslate: (Boolean) -> Unit = { enabled ->
                         showTranslate = enabled
                         if (enabled) {
+                            isModelDownloading = true
                             translator.downloadModelIfNeeded(DownloadConditions.Builder().build())
                                 .addOnSuccessListener {
+                                    isModelDownloading = false
                                     scope.launch {
                                     try {
                                         // Check what to translate
@@ -694,6 +702,10 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                             }
+                                .addOnFailureListener {
+                                    isModelDownloading = false
+                                    Log.e("Translate", "Model download failed", it)
+                                }
                         }
                     }
                     val onSave: () -> Unit = {
@@ -789,6 +801,14 @@ class MainActivity : ComponentActivity() {
                                         )
                                     }
                                 }
+                            )
+                        }
+
+                        if (isAnyTranslationActive) {
+                            LinearProgressIndicator(
+                                modifier = Modifier.fillMaxWidth(),
+                                color = MaterialTheme.colorScheme.primary,
+                                trackColor = MaterialTheme.colorScheme.surfaceVariant
                             )
                         }
 
