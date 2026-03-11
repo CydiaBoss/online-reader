@@ -18,5 +18,6 @@ data class Story(
     @ColumnInfo(name = "completed") val completed: Boolean,
     @ColumnInfo(name = "word_count") val wordCount: Int,
     @ColumnInfo(name = "last_updated") val lastUpdated: Date,
-    @ColumnInfo(name = "tags") val tags: List<String>
+    @ColumnInfo(name = "tags") val tags: List<String>,
+    @ColumnInfo(name = "bookmarked_chapter_id") var bookmarkedChapterId: Int? = null
 )

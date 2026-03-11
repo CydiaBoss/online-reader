@@ -13,9 +13,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -35,10 +37,12 @@ import java.util.Locale
 @Composable
 fun StoryView(
     story: Story,
+    isSaved: Boolean = false,
     showTranslate: Boolean = false,
     translatedStory: StoryLocale? = null,
     onChapterClick: () -> Unit,
-    onSave: () -> Unit
+    onSave: () -> Unit,
+    onDelete: () -> Unit
 ) {
     val dateFormatter = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
 
@@ -93,13 +97,21 @@ fun StoryView(
             modifier = Modifier
                 .fillMaxWidth()
         ) {
-            IconButton(
-                onClick = onSave
-            ) {
-                Icon(
-                    painter = painterResource(id = R.drawable.add_24px),
-                    contentDescription = "save"
-                )
+            if (isSaved) {
+                IconButton(onClick = onDelete) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "delete",
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
+            } else {
+                IconButton(onClick = onSave) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.add_24px),
+                        contentDescription = "save"
+                    )
+                }
             }
             Spacer(Modifier.weight(1f))
             IconButton(onClick = onChapterClick) {

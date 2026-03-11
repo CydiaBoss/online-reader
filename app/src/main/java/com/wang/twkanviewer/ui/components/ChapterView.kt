@@ -20,6 +20,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -44,10 +46,12 @@ import kotlinx.coroutines.delay
 @Composable
 fun ChapterView(
     chapter: Chapter,
+    isBookmarked: Boolean = false,
     showTranslate: Boolean = false,
     translatedChapter: ChapterLocale? = null,
     fontSize: Float,
     onFontSizeChange: (Float) -> Unit,
+    onBookmarkClick: () -> Unit,
     onPreviousClick: () -> Unit,
     onNextClick: () -> Unit,
     onBackClick: () -> Unit,
@@ -161,6 +165,14 @@ fun ChapterView(
                     
                     IconButton(onClick = onPreviousClick) {
                         Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Previous Chapter")
+                    }
+
+                    IconButton(onClick = onBookmarkClick) {
+                        Icon(
+                            imageVector = if (isBookmarked) Icons.Default.Star else Icons.Outlined.Star,
+                            contentDescription = "Bookmark",
+                            tint = if (isBookmarked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                        )
                     }
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
