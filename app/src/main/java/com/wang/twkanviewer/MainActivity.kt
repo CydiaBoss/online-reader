@@ -6,7 +6,6 @@ import android.util.Log
 import android.view.ViewGroup
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
-import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
@@ -28,6 +27,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -57,7 +57,6 @@ import com.wang.twkanviewer.ui.components.StoryView
 import com.wang.twkanviewer.ui.theme.TWKANViewerTheme
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.tasks.asDeferred
 import kotlinx.coroutines.tasks.await
 import java.text.SimpleDateFormat
@@ -94,6 +93,11 @@ class MainActivity : ComponentActivity() {
                     val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
                     val dateTimeFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
 
+                    // Settings
+                    val settingsManager = remember { SettingsManager(this) }
+                    val savedShowTranslate by settingsManager.showTranslate.collectAsState(initial = false)
+                    val savedChapterFontSize by settingsManager.chapterFontSize.collectAsState(initial = 16f)
+
                     // State
                     var showTopBar by remember { mutableStateOf(true) }
                     var currentViewState by remember { mutableStateOf(ViewState.BROWSER) }
@@ -109,7 +113,7 @@ class MainActivity : ComponentActivity() {
                     val allTranslatedStories = remember { mutableStateListOf<StoryLocale>() }
                     
                     // Tracking state to avoid duplicate concurrent translations
-                    val translatingIds = remember { mutableSetOf<Int>() }
+                    val translatingIds = remember { mutableStateListOf<Int>() }
                     var isStoryTranslating by remember { mutableStateOf(false) }
                     var isListTranslating by remember { mutableStateOf(false) }
                     var isLibraryTranslating by remember { mutableStateOf(false) }
@@ -119,6 +123,14 @@ class MainActivity : ComponentActivity() {
 
                     // Settings
                     var chapterFontSize by remember { mutableFloatStateOf(16f) }
+
+                    // Sync settings
+                    LaunchedEffect(savedShowTranslate) {
+                        showTranslate = savedShowTranslate
+                    }
+                    LaunchedEffect(savedChapterFontSize) {
+                        chapterFontSize = savedChapterFontSize
+                    }
 
                     // Database
                     val db = AppDatabase.getDatabase(this)
@@ -268,7 +280,7 @@ class MainActivity : ComponentActivity() {
                                                     content = emptyList()
                                                 )
                                             )
-                                            i++;
+                                            i++
                                         }
                                         return@launch
                                     }
@@ -479,6 +491,7 @@ class MainActivity : ComponentActivity() {
                     }
                     val onTranslate: (Boolean) -> Unit = { enabled ->
                         showTranslate = enabled
+                        scope.launch { settingsManager.setShowTranslate(enabled) }
                         if (enabled) {
                             isModelDownloading = true
                             translator.downloadModelIfNeeded(DownloadConditions.Builder().build())
@@ -860,7 +873,10 @@ class MainActivity : ComponentActivity() {
                                         showTranslate = showTranslate,
                                         translatedChapter = translatedChapters.find { tChap -> tChap.chapterId == it.id },
                                         fontSize = chapterFontSize,
-                                        onFontSizeChange = { newSize -> chapterFontSize = newSize },
+                                        onFontSizeChange = { newSize -> 
+                                            chapterFontSize = newSize
+                                            scope.launch { settingsManager.setChapterFontSize(newSize) }
+                                        },
                                         onBookmarkClick = onToggleBookmark,
                                         onPreviousClick = onPreviousChapter,
                                         onNextClick = onNextChapter,

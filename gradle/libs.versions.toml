@@ -15,6 +15,7 @@ ksoup = "0.2.6"
 room = "2.7.0-alpha11"
 ksp = "2.1.0-1.0.29"
 kotlinxCoroutinesPlayServices = "1.10.2"
+datastorePreferences = "1.2.1"
 
 [libraries]
 androidx-browser = { module = "androidx.browser:browser", version = "1.9.0" }
@@ -40,6 +41,7 @@ androidx-room-runtime = { group = "androidx.room", name = "room-runtime", versio
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 kotlinx-coroutines-play-services = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-play-services", version.ref = "kotlinxCoroutinesPlayServices" }
+androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastorePreferences" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
