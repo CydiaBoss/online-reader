@@ -16,6 +16,9 @@ room = "2.7.0-alpha11"
 ksp = "2.1.0-1.0.29"
 kotlinxCoroutinesPlayServices = "1.10.2"
 datastorePreferences = "1.2.1"
+retrofit = "3.0.0"
+converterGson = "3.0.0"
+converterScalars = "3.0.0"
 
 [libraries]
 androidx-browser = { module = "androidx.browser:browser", version = "1.9.0" }
@@ -42,6 +45,9 @@ androidx-room-compiler = { group = "androidx.room", name = "room-compiler", vers
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 kotlinx-coroutines-play-services = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-play-services", version.ref = "kotlinxCoroutinesPlayServices" }
 androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastorePreferences" }
+retrofit = { group = "com.squareup.retrofit2", name = "retrofit", version.ref = "retrofit" }
+converter-gson = { group = "com.squareup.retrofit2", name = "converter-gson", version.ref = "converterGson" }
+converter-scalars = { group = "com.squareup.retrofit2", name = "converter-scalars", version.ref = "converterScalars" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
