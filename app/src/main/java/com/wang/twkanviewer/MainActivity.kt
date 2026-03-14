@@ -306,28 +306,42 @@ class MainActivity : ComponentActivity() {
                                     val matchChaptersUrl = regexChapters.find(loadedUrl)
                                     if (matchChaptersUrl != null) {
                                         val storyId = matchChaptersUrl.groupValues[1].toInt()
-                                        // Find Chapters
                                         val elements = doc.select("div#allchapter ul li a")
 
-                                        // Validate if an update is needed for the list
-                                        if (
-                                            currentChapters.isNotEmpty() &&
-                                            currentChapters.first().storyId == storyId &&
-                                            currentChapters.size == elements.size
-                                        ) {
+                                        // If it's the same story, check for new chapters
+                                        if (currentChapters.isNotEmpty() && currentChapters.first().storyId == storyId) {
+                                            if (elements.size > currentChapters.size) {
+                                                // Append new chapters
+                                                val newChapters = mutableListOf<Chapter>()
+                                                elements.drop(currentChapters.size).forEachIndexed { index, cLink ->
+                                                    val tokens = regexTxt.find(cLink.attr("href")) ?: return@forEachIndexed
+                                                    newChapters.add(
+                                                        Chapter(
+                                                            id = tokens.groupValues[2].toInt(),
+                                                            storyId = storyId,
+                                                            order = currentChapters.size + index,
+                                                            title = cLink.text().trim(),
+                                                            url = cLink.attr("href"),
+                                                            uploadedAt = null,
+                                                            content = emptyList()
+                                                        )
+                                                    )
+                                                }
+                                                if (newChapters.isNotEmpty()) {
+                                                    currentChapters.addAll(newChapters)
+                                                    if (storyDao.getById(storyId) != null) {
+                                                        chapterDao.insertAll(newChapters)
+                                                    }
+                                                }
+                                            }
                                             return@launch
                                         }
 
-                                        // Clear
+                                        // Otherwise full rebuild or first load
                                         currentChapters.clear()
-
-                                        // Parse chapters
                                         var i = 0
                                         elements.forEach { cLink ->
-                                            // Parse chapter url
-                                            val tokens =
-                                                regexTxt.find(cLink.attr("href"))
-                                                    ?: return@forEach
+                                            val tokens = regexTxt.find(cLink.attr("href")) ?: return@forEach
                                             currentChapters.add(
                                                 Chapter(
                                                     id = tokens.groupValues[2].toInt(),
@@ -342,7 +356,7 @@ class MainActivity : ComponentActivity() {
                                             i++
                                         }
                                         
-                                        // Persist chapters if story is in library
+                                        // Persist if story is in library
                                         if (storyDao.getById(storyId) != null) {
                                             chapterDao.insertAll(currentChapters.toList())
                                         }
@@ -594,11 +608,7 @@ class MainActivity : ComponentActivity() {
                     val onShowChapters: () -> Unit = {
                         if (currentStory != null) {
                             val indexUrl = currentStory!!.url.replace(".html", "/index.html")
-                            if (currentChapters.isEmpty() || currentChapters.first().storyId != currentStory!!.id) {
-                                // Clear
-                                currentChapters.clear()
-                            }
-                            // Always sync WebView URL when entering chapter list
+                            // Always sync WebView URL when entering chapter list to check for updates
                             webView.loadUrl(indexUrl)
                             navigateTo(ViewState.CHAPTER_LIST)
                         }

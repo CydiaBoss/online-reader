@@ -62,7 +62,9 @@ fun ChapterView(
     onBackClick: () -> Unit,
     onToggleBars: (Boolean) -> Unit = {}
 ) {
-    val pagerState = rememberPagerState(initialPage = initialIndex) { chapters.size }
+    // pageCount is chapters + 2 dummy pages (index 0 and index chapters.size + 1)
+    val pageCount = chapters.size + 2
+    val pagerState = rememberPagerState(initialPage = initialIndex + 1) { pageCount }
     val scope = rememberCoroutineScope()
     var showAppBar by remember { mutableStateOf(true) }
 
@@ -81,14 +83,22 @@ fun ChapterView(
 
     // Sync pager with external index changes (e.g. from list)
     LaunchedEffect(initialIndex) {
-        if (pagerState.currentPage != initialIndex) {
-            pagerState.scrollToPage(initialIndex)
+        val targetPage = initialIndex + 1
+        if (pagerState.currentPage != targetPage) {
+            pagerState.scrollToPage(targetPage)
         }
     }
 
-    // Notify MainActivity when chapter changes via swipe
+    // Navigation and Boundary Logic
     LaunchedEffect(pagerState.currentPage) {
-        onNavigateToChapter(chapters[pagerState.currentPage])
+        when (pagerState.currentPage) {
+            0 -> onBackClick() // Swiped past first chapter
+            pageCount - 1 -> onBackClick() // Swiped past last chapter
+            else -> {
+                // Real chapter index is currentPage - 1
+                onNavigateToChapter(chapters[pagerState.currentPage - 1])
+            }
+        }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -97,17 +107,27 @@ fun ChapterView(
             modifier = Modifier.fillMaxSize(),
             beyondViewportPageCount = 1
         ) { page ->
-            val chapter = chapters[page]
-            val translatedChapter = translatedChapters.find { it.chapterId == chapter.id }
-            
-            ChapterPageContent(
-                chapter = chapter,
-                translatedChapter = translatedChapter,
-                showTranslate = showTranslate,
-                fontSize = fontSize,
-                onToggleAppBar = { showAppBar = !showAppBar },
-                onScrollInProgress = { if (it) showAppBar = false }
-            )
+            when (page) {
+                0, pageCount - 1 -> {
+                    // Dummy boundary pages
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator()
+                    }
+                }
+                else -> {
+                    val chapter = chapters[page - 1]
+                    val translatedChapter = translatedChapters.find { it.chapterId == chapter.id }
+
+                    ChapterPageContent(
+                        chapter = chapter,
+                        translatedChapter = translatedChapter,
+                        showTranslate = showTranslate,
+                        fontSize = fontSize,
+                        onToggleAppBar = { showAppBar = !showAppBar },
+                        onScrollInProgress = { if (it) showAppBar = false }
+                    )
+                }
+            }
         }
 
         AnimatedVisibility(
@@ -116,7 +136,7 @@ fun ChapterView(
             exit = slideOutVertically(targetOffsetY = { it }),
             modifier = Modifier.align(Alignment.BottomCenter)
         ) {
-            BottomAppBar() {
+            BottomAppBar {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly,
@@ -128,18 +148,19 @@ fun ChapterView(
                     
                     IconButton(
                         onClick = {
+                            // Current page is always > 0 when inside real chapters
                             scope.launch {
-                                if (pagerState.currentPage > 0) {
-                                    pagerState.animateScrollToPage(pagerState.currentPage - 1)
-                                }
+                                pagerState.animateScrollToPage(pagerState.currentPage - 1)
                             }
-                        },
-                        enabled = pagerState.currentPage > 0
+                        }
                     ) {
                         Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Previous Chapter")
                     }
 
-                    val isBookmarked = chapters[pagerState.currentPage].id == bookmarkedChapterId
+                    // Index check for bookmark logic
+                    val currentChapterIndex = (pagerState.currentPage - 1).coerceIn(0, chapters.size - 1)
+                    val isBookmarked = chapters[currentChapterIndex].id == bookmarkedChapterId
+                    
                     IconButton(onClick = onBookmarkClick) {
                         Icon(
                             imageVector = if (isBookmarked) Icons.Default.Star else Icons.Outlined.Star,
@@ -164,13 +185,11 @@ fun ChapterView(
 
                     IconButton(
                         onClick = {
+                            // Current page is always < pageCount - 1 when inside real chapters
                             scope.launch {
-                                if (pagerState.currentPage < chapters.size - 1) {
-                                    pagerState.animateScrollToPage(pagerState.currentPage + 1)
-                                }
+                                pagerState.animateScrollToPage(pagerState.currentPage + 1)
                             }
-                        },
-                        enabled = pagerState.currentPage < chapters.size - 1
+                        }
                     ) {
                         Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Next Chapter")
                     }
@@ -198,9 +217,9 @@ private fun ChapterPageContent(
 
     // Determine what text to display. Fallback to original text if translation content is missing or empty.
     val isTranslatedAvailable = showTranslate && translatedChapter != null
-    val displayTitle = if (isTranslatedAvailable) translatedChapter!!.title else chapter.title
-    val paragraphs = if (isTranslatedAvailable && translatedChapter!!.content.isNotEmpty()) 
-        translatedChapter!!.content 
+    val displayTitle = if (isTranslatedAvailable) translatedChapter.title else chapter.title
+    val paragraphs = if (isTranslatedAvailable && translatedChapter.content.isNotEmpty())
+        translatedChapter.content
     else 
         chapter.content
 
