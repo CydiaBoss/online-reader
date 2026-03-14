@@ -21,6 +21,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -29,6 +31,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -541,6 +544,30 @@ class MainActivity : ComponentActivity() {
                         isCurrentStorySaved = currentStory?.let { storyDao.getById(it.id) != null } ?: false
                     }
 
+                    // Dialog state
+                    var showExitPrompt by remember { mutableStateOf(false) }
+                    var nextViewStateAfterPrompt by remember { mutableStateOf<ViewState?>(null) }
+                    
+                    val onSave: () -> Unit = {
+                        scope.launch {
+                            currentStory?.let { story ->
+                                storyDao.insert(story)
+                                isCurrentStorySaved = true
+                                translatedStory?.let { locale ->
+                                    if (locale.storyId == story.id) {
+                                        storyDao.insertLocale(locale)
+                                    }
+                                }
+
+                                currentChapters.forEach { chapter ->
+                                    chapter.storyId = story.id
+                                }
+                                chapterDao.insertAll(currentChapters)
+                                chapterDao.insertAllLocale(translatedChapters.filter { currentChapters.find { c -> c.id == it.chapterId } != null })
+                            }
+                        }
+                    }
+
                     // Function
                     val onShowScrapped: (Boolean) -> Unit = {
                         if (it && isScrappableUrl) {
@@ -556,7 +583,12 @@ class MainActivity : ComponentActivity() {
                                 navigateTo(ViewState.CHAPTER)
                             }
                         }else{
-                            navigateTo(ViewState.BROWSER)
+                            if (!isCurrentStorySaved && currentStory != null) {
+                                nextViewStateAfterPrompt = ViewState.BROWSER
+                                showExitPrompt = true
+                            } else {
+                                navigateTo(ViewState.BROWSER)
+                            }
                         }
                     }
                     val onShowChapters: () -> Unit = {
@@ -872,27 +904,6 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     }
-                    val onSave: () -> Unit = {
-                        scope.launch {
-                            currentStory?.let { story ->
-                                storyDao.insert(story)
-                                isCurrentStorySaved = true
-                                translatedStory?.let { locale ->
-                                    if (locale.storyId == story.id) {
-                                        storyDao.insertLocale(locale)
-                                    }
-                                }
-
-                                currentChapters.forEach { chapter ->
-                                    chapter.storyId = story.id
-                                    chapterDao.insertAll(listOf(chapter))
-                                    translatedChapters.find { it.chapterId == chapter.id }?.let { locale ->
-                                        chapterDao.insertLocale(locale)
-                                    }
-                                }
-                            }
-                        }
-                    }
 
                     LaunchedEffect(currentViewState, showTranslate, currentStory, currentChapters.size, currentChapter, useExternalTranslator) {
                         if (showTranslate) {
@@ -919,23 +930,56 @@ class MainActivity : ComponentActivity() {
 
                     BackHandler(enabled = true) {
                         showTopBar = true
-                        when(currentViewState) {
-                            ViewState.BROWSER -> {
-                                if (webView.canGoBack()) webView.goBack()
-                                else finish()
-                            }
-                            ViewState.STORY -> currentViewState = ViewState.BROWSER
-                            ViewState.CHAPTER_LIST -> {
-                                currentViewState = ViewState.STORY
-                                webView.goBack()
-                            }
-                            ViewState.CHAPTER -> {
-                                currentViewState = ViewState.CHAPTER_LIST
-                                webView.goBack()
-                            }
-                            ViewState.STORY_LIST -> currentViewState = ViewState.BROWSER
-                            ViewState.SETTINGS -> currentViewState = ViewState.BROWSER
+                        val targetState = when(currentViewState) {
+                            ViewState.BROWSER -> null
+                            ViewState.STORY -> ViewState.BROWSER
+                            ViewState.CHAPTER_LIST -> ViewState.STORY
+                            ViewState.CHAPTER -> ViewState.CHAPTER_LIST
+                            ViewState.STORY_LIST -> ViewState.BROWSER
+                            ViewState.SETTINGS -> ViewState.BROWSER
                         }
+
+                        if (targetState == ViewState.BROWSER && !isCurrentStorySaved && currentStory != null) {
+                            nextViewStateAfterPrompt = ViewState.BROWSER
+                            showExitPrompt = true
+                        } else if (targetState != null) {
+                            if (currentViewState == ViewState.BROWSER && webView.canGoBack()) {
+                                webView.goBack()
+                            } else if (currentViewState != ViewState.BROWSER) {
+                                if (targetState == ViewState.STORY || targetState == ViewState.CHAPTER_LIST) {
+                                    webView.goBack()
+                                }
+                                navigateTo(targetState)
+                            }
+                        } else {
+                            if (webView.canGoBack()) webView.goBack()
+                            else finish()
+                        }
+                    }
+
+                    if (showExitPrompt) {
+                        AlertDialog(
+                            onDismissRequest = { showExitPrompt = false },
+                            title = { Text("Unsaved Changes") },
+                            text = { Text("This story is not in your library. Would you like to save it and its translations before leaving?") },
+                            confirmButton = {
+                                Button(onClick = {
+                                    onSave()
+                                    showExitPrompt = false
+                                    nextViewStateAfterPrompt?.let { navigateTo(it) }
+                                }) {
+                                    Text("Save and Exit")
+                                }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = {
+                                    showExitPrompt = false
+                                    nextViewStateAfterPrompt?.let { navigateTo(it) }
+                                }) {
+                                    Text("Discard and Exit")
+                                }
+                            }
+                        )
                     }
 
                     Column {

@@ -15,6 +15,9 @@ interface ChapterDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertLocale(locale: ChapterLocale)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAllLocale(locales: List<ChapterLocale>)
+
     @Query("SELECT * FROM chapters WHERE story_id = :storyId ORDER BY 'order' ASC")
     suspend fun getChaptersForStory(storyId: Int): List<Chapter>
 

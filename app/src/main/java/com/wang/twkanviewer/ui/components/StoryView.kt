@@ -14,12 +14,18 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -45,12 +51,36 @@ fun StoryView(
     onDelete: () -> Unit
 ) {
     val dateFormatter = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+    var showDeleteDialog by remember { mutableStateOf(false) }
 
     // Determine display values based on translation state
     val displayTitle = if (showTranslate && translatedStory != null) translatedStory.title else story.title
     val displayGenre = if (showTranslate && translatedStory != null) translatedStory.genre else story.genre
     val displayDescription = if (showTranslate && translatedStory != null) translatedStory.description else story.description
     val displayTags = if (showTranslate && translatedStory != null) translatedStory.tags else story.tags.joinToString(", ")
+
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Delete Story") },
+            text = { Text("Are you sure you want to delete '${story.title}' and all its saved chapters from your library?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onDelete()
+                        showDeleteDialog = false
+                    }
+                ) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 
     Column(
         modifier = Modifier.fillMaxSize()
@@ -98,7 +128,7 @@ fun StoryView(
                 .fillMaxWidth()
         ) {
             if (isSaved) {
-                IconButton(onClick = onDelete) {
+                IconButton(onClick = { showDeleteDialog = true }) {
                     Icon(
                         imageVector = Icons.Default.Delete,
                         contentDescription = "delete",
