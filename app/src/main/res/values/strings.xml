@@ -8,4 +8,11 @@
     <string name="save_button_label">Save</string>
     <string name="url_textfield_label">URL</string>
     <string name="translate_button_label">Translate</string>
+    <string name="library_content_description">Library</string>
+    <string name="scrapper_content_description">Scrapper</string>
+    <string name="translator_content_description">Translator</string>
+    <string name="settings_content_description">Settings</string>
+    <string name="default_url">https://twkan.com</string>
+    <string name="translation_api_base_url">https://translate-pa.googleapis.com/</string>
+    <string name="default_user_agent">Mozilla/5.0 (Linux; Android 10; SM-G975F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.198 Mobile Safari/537.36</string>
 </resources>

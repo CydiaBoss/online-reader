@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -55,6 +57,7 @@ import com.wang.twkanviewer.models.StoryLocale
 import com.wang.twkanviewer.ui.components.BrowserView
 import com.wang.twkanviewer.ui.components.ChapterListView
 import com.wang.twkanviewer.ui.components.ChapterView
+import com.wang.twkanviewer.ui.components.SettingsView
 import com.wang.twkanviewer.ui.components.StoryListView
 import com.wang.twkanviewer.ui.components.StoryView
 import com.wang.twkanviewer.ui.theme.TWKANViewerTheme
@@ -74,7 +77,7 @@ import java.util.Locale
 class MainActivity : ComponentActivity() {
 
     enum class ViewState {
-        BROWSER, STORY, CHAPTER_LIST, CHAPTER, STORY_LIST
+        BROWSER, STORY, CHAPTER_LIST, CHAPTER, STORY_LIST, SETTINGS
     }
 
     /**
@@ -89,7 +92,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         val retrofit = Retrofit.Builder()
-            .baseUrl("https://translate-pa.googleapis.com/")
+            .baseUrl(getString(R.string.translation_api_base_url))
             .addConverterFactory(ScalarsConverterFactory.create())
             .addConverterFactory(GsonConverterFactory.create())
             .build()
@@ -183,7 +186,10 @@ class MainActivity : ComponentActivity() {
                     }
 
                     // WebView
-                    var currentUrl by remember { mutableStateOf("https://twkan.com") }
+                    val defaultUrl = stringResource(id = R.string.default_url)
+                    val defaultUserAgent = stringResource(id = R.string.default_user_agent)
+                    var currentUrl by remember { mutableStateOf(defaultUrl) }
+                    
                     @SuppressLint("SetJavaScriptEnabled")
                     val webView = remember {
                         WebView(this).apply {
@@ -345,7 +351,7 @@ class MainActivity : ComponentActivity() {
                                         // Parse chapter page here
                                         val chapterDateStr = doc.selectFirst("div.txtinfo > span")?.text()
                                         val chapterDate = if (chapterDateStr != null) {
-                                            try { dateTimeFormat.parse(chapterDateStr) } catch (e: Exception) { null }
+                                            try { dateTimeFormat.parse(chapterDateStr) } catch (_: Exception) { null }
                                         } else null
 
                                         // Preserve newlines from <p> and <br> tags
@@ -432,9 +438,7 @@ class MainActivity : ComponentActivity() {
                             webChromeClient = WebChromeClient() // Add this
 
                             // Set user-agent string from settings
-                            settings.userAgentString = userAgent.ifEmpty {
-                                "Mozilla/5.0 (Linux; Android 10; SM-G975F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.198 Mobile Safari/537.36"
-                            }
+                            settings.userAgentString = userAgent.ifEmpty { defaultUserAgent }
 
                             settings.javaScriptEnabled = true
                             settings.domStorageEnabled = true
@@ -589,22 +593,6 @@ class MainActivity : ComponentActivity() {
 
                         navigateTo(ViewState.CHAPTER)
                     }
-                    val onPreviousChapter: () -> Unit = {
-                        currentChapter?.let { chapter ->
-                            val index = currentChapters.indexOfFirst { it.url == chapter.url }
-                            if (index > 0) {
-                                onShowChapter(currentChapters[index - 1])
-                            }
-                        }
-                    }
-                    val onNextChapter: () -> Unit = {
-                        currentChapter?.let { chapter ->
-                            val index = currentChapters.indexOfFirst { it.url == chapter.url }
-                            if (index != -1 && index < currentChapters.size - 1) {
-                                onShowChapter(currentChapters[index + 1])
-                            }
-                        }
-                    }
                     val onShowLibrary: () -> Unit = {
                         scope.launch {
                             allStories.clear()
@@ -642,11 +630,6 @@ class MainActivity : ComponentActivity() {
                                 storyDao.insert(updatedStory)
                             }
                         }
-                    }
-
-                    val onToggleExternalTranslator: (Boolean) -> Unit = { enabled ->
-                        useExternalTranslator = enabled
-                        scope.launch { settingsManager.setUseExternalTranslator(enabled) }
                     }
 
                     val onTranslate: (Boolean) -> Unit = { enabled ->
@@ -870,6 +853,7 @@ class MainActivity : ComponentActivity() {
                                                 }
                                             }
                                             ViewState.BROWSER -> {}
+                                            ViewState.SETTINGS -> {}
                                         }
                                     } catch (e: Exception) {
                                         Log.e("Translate", "Error in onTranslate", e)
@@ -950,6 +934,7 @@ class MainActivity : ComponentActivity() {
                                 webView.goBack()
                             }
                             ViewState.STORY_LIST -> currentViewState = ViewState.BROWSER
+                            ViewState.SETTINGS -> currentViewState = ViewState.BROWSER
                         }
                     }
 
@@ -965,11 +950,11 @@ class MainActivity : ComponentActivity() {
                                     IconButton(onClick = onShowLibrary) {
                                         Icon(
                                             painter = painterResource(id = R.drawable.twkan_icon_foreground),
-                                            contentDescription = "Library",
+                                            contentDescription = stringResource(id = R.string.library_content_description),
                                             modifier = Modifier.size(24.dp)
                                         )
                                     }
-                                    val isScrappedView = currentViewState != ViewState.BROWSER && currentViewState != ViewState.STORY_LIST
+                                    val isScrappedView = currentViewState != ViewState.BROWSER && currentViewState != ViewState.STORY_LIST && currentViewState != ViewState.SETTINGS
                                     IconToggleButton(
                                         checked = isScrappedView,
                                         onCheckedChange = onShowScrapped,
@@ -977,19 +962,7 @@ class MainActivity : ComponentActivity() {
                                     ) {
                                         Icon(
                                             painter = painterResource(id = R.drawable.scan_24px),
-                                            contentDescription = "scrapper"
-                                        )
-                                    }
-                                    Spacer(Modifier.width(4.dp))
-                                    IconToggleButton(
-                                        checked = useExternalTranslator,
-                                        onCheckedChange = onToggleExternalTranslator,
-                                        enabled = showTranslate
-                                    ) {
-                                        Icon(
-                                            painter = painterResource(id = R.drawable.cloud_download_24px),
-                                            contentDescription = "External Translator",
-                                            tint = if (useExternalTranslator) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                            contentDescription = stringResource(id = R.string.scrapper_content_description)
                                         )
                                     }
                                     Spacer(Modifier.width(4.dp))
@@ -1000,8 +973,11 @@ class MainActivity : ComponentActivity() {
                                     ) {
                                         Icon(
                                             painter = painterResource(id = R.drawable.translate_24px),
-                                            contentDescription = "translator"
+                                            contentDescription = stringResource(id = R.string.translator_content_description)
                                         )
+                                    }
+                                    IconButton(onClick = { navigateTo(ViewState.SETTINGS) }) {
+                                        Icon(Icons.Default.Settings, contentDescription = stringResource(id = R.string.settings_content_description))
                                     }
                                 }
                             )
@@ -1050,23 +1026,41 @@ class MainActivity : ComponentActivity() {
                                                 listState = chapterListState
                                             )
                                         ViewState.CHAPTER -> 
-                                            currentChapter?.let {
-                                                ChapterView(
-                                                    chapter = it,
-                                                    isBookmarked = it.id == currentStory?.bookmarkedChapterId,
-                                                    showTranslate = showTranslate,
-                                                    translatedChapter = translatedChapters.find { tChap -> tChap.chapterId == it.id },
-                                                    fontSize = chapterFontSize,
-                                                    onFontSizeChange = { newSize -> 
-                                                        chapterFontSize = newSize
-                                                        scope.launch { settingsManager.setChapterFontSize(newSize) }
-                                                    },
-                                                    onBookmarkClick = onToggleBookmark,
-                                                    onPreviousClick = onPreviousChapter,
-                                                    onNextClick = onNextChapter,
-                                                    onBackClick = onShowChapters,
-                                                    onToggleBars = { visible -> showTopBar = visible }
-                                                )
+                                            currentChapter?.let { chapter ->
+                                                val chapterIndex = currentChapters.indexOfFirst { it.url == chapter.url }
+                                                if (chapterIndex != -1) {
+                                                    ChapterView(
+                                                        chapters = currentChapters,
+                                                        initialIndex = chapterIndex,
+                                                        bookmarkedChapterId = currentStory?.bookmarkedChapterId,
+                                                        showTranslate = showTranslate,
+                                                        translatedChapters = translatedChapters,
+                                                        fontSize = chapterFontSize,
+                                                        onFontSizeChange = { newSize -> 
+                                                            chapterFontSize = newSize
+                                                            scope.launch { settingsManager.setChapterFontSize(newSize) }
+                                                        },
+                                                        onBookmarkClick = onToggleBookmark,
+                                                        onNavigateToChapter = { newChapter ->
+                                                            if (currentChapter?.url != newChapter.url) {
+                                                                currentChapter = newChapter
+                                                                webView.loadUrl(newChapter.url)
+                                                                
+                                                                // Auto-bookmark
+                                                                scope.launch {
+                                                                    val story = currentStory ?: return@launch
+                                                                    val updatedStory = story.copy(bookmarkedChapterId = newChapter.id)
+                                                                    currentStory = updatedStory
+                                                                    if (storyDao.getById(story.id) != null) {
+                                                                        storyDao.insert(updatedStory)
+                                                                    }
+                                                                }
+                                                            }
+                                                        },
+                                                        onBackClick = onShowChapters,
+                                                        onToggleBars = { visible -> showTopBar = visible }
+                                                    )
+                                                }
                                             }
                                         ViewState.STORY_LIST ->
                                             StoryListView(
@@ -1080,6 +1074,30 @@ class MainActivity : ComponentActivity() {
                                                     currentViewState = ViewState.STORY
                                                 },
                                                 onDeleteStory = onDeleteStory
+                                            )
+                                        ViewState.SETTINGS ->
+                                            SettingsView(
+                                                useExternalTranslator = useExternalTranslator,
+                                                onUseExternalTranslatorChange = { enabled ->
+                                                    useExternalTranslator = enabled
+                                                    scope.launch { settingsManager.setUseExternalTranslator(enabled) }
+                                                },
+                                                translatorApiKey = translatorApiKey,
+                                                onTranslatorApiKeyChange = { key ->
+                                                    translatorApiKey = key
+                                                    scope.launch { settingsManager.setTranslatorApiKey(key) }
+                                                },
+                                                userAgent = userAgent,
+                                                onUserAgentChange = { ua ->
+                                                    userAgent = ua
+                                                    scope.launch { settingsManager.setUserAgent(ua) }
+                                                },
+                                                chapterFontSize = chapterFontSize,
+                                                onChapterFontSizeChange = { size ->
+                                                    chapterFontSize = size
+                                                    scope.launch { settingsManager.setChapterFontSize(size) }
+                                                },
+                                                onBackClick = { currentViewState = ViewState.BROWSER }
                                             )
                                         ViewState.BROWSER -> {}
                                     }
