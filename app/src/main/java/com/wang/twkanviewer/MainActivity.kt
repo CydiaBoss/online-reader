@@ -11,12 +11,14 @@ import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -56,8 +58,9 @@ import com.wang.twkanviewer.ui.components.ChapterView
 import com.wang.twkanviewer.ui.components.StoryListView
 import com.wang.twkanviewer.ui.components.StoryView
 import com.wang.twkanviewer.ui.theme.TWKANViewerTheme
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.async
 import kotlinx.coroutines.tasks.await
 import org.json.JSONArray
 import retrofit2.Retrofit
@@ -121,6 +124,10 @@ class MainActivity : ComponentActivity() {
                     var currentChapter by remember { mutableStateOf<Chapter?>(null) }
                     val allStories = remember { mutableStateListOf<Story>() }
 
+                    // Scroll State
+                    val chapterListState = rememberLazyListState()
+                    var lastScrolledStoryId by remember { mutableStateOf<Int?>(null) }
+
                     // Translation
                     var showTranslate by remember { mutableStateOf(false) }
                     var useExternalTranslator by remember { mutableStateOf(false) }
@@ -136,6 +143,8 @@ class MainActivity : ComponentActivity() {
                     var isListTranslating by remember { mutableStateOf(false) }
                     var isLibraryTranslating by remember { mutableStateOf(false) }
                     var isModelDownloading by remember { mutableStateOf(false) }
+                    var listTranslationJob by remember { mutableStateOf<Job?>(null) }
+                    var libraryTranslationJob by remember { mutableStateOf<Job?>(null) }
 
                     val isAnyTranslationActive = isStoryTranslating || isListTranslating || isLibraryTranslating || translatingIds.isNotEmpty() || isModelDownloading
 
@@ -188,8 +197,7 @@ class MainActivity : ComponentActivity() {
                                 // Help with bg js thread
                                 scope.launch {
                                     // Validate url
-                                    if (url == null) return@launch
-                                    val loadedUrl = url!!
+                                    val loadedUrl = url ?: return@launch
 
                                     // The 'content' variable is a JSON-encoded string, so it needs to be unescaped.
                                     val unescapedHtml =
@@ -205,6 +213,13 @@ class MainActivity : ComponentActivity() {
                                     // Process if book URL
                                     val matchBookUrl = regexBook.find(loadedUrl)
                                     if (matchBookUrl != null) {
+                                        val storyId = matchBookUrl.groupValues[1].toInt()
+                                        
+                                        // Preserve existing bookmark if we already have this story in DB or state
+                                        val existingStory = storyDao.getById(storyId)
+                                        val existingBookmark = existingStory?.bookmarkedChapterId 
+                                            ?: currentStory?.takeIf { it.id == storyId }?.bookmarkedChapterId
+
                                         val title =
                                             doc.selectFirst("div.booknav2 h1 a")?.text()
                                                 ?: ""
@@ -255,8 +270,8 @@ class MainActivity : ComponentActivity() {
                                         val tags =
                                             doc.select("div.tagul a").map { it.text() }
 
-                                        currentStory = Story(
-                                            id = matchBookUrl.groupValues[1].toInt(),
+                                        val scrapedStory = Story(
+                                            id = storyId,
                                             url = loadedUrl,
                                             title = title,
                                             imgUrl = imgUrl,
@@ -267,20 +282,28 @@ class MainActivity : ComponentActivity() {
                                             wordCount = wordCount.toInt(),
                                             lastUpdated = lastUpdated,
                                             tags = tags,
+                                            bookmarkedChapterId = existingBookmark
                                         )
+                                        currentStory = scrapedStory
+                                        
+                                        // Update database if story is in library
+                                        if (existingStory != null) {
+                                            storyDao.insert(scrapedStory)
+                                        }
                                         return@launch
                                     }
 
                                     // Process if chapters URL
-                                    val matchChaptersUrl = regexChapters.find(currentUrl)
+                                    val matchChaptersUrl = regexChapters.find(loadedUrl)
                                     if (matchChaptersUrl != null) {
+                                        val storyId = matchChaptersUrl.groupValues[1].toInt()
                                         // Find Chapters
                                         val elements = doc.select("div#allchapter ul li a")
 
                                         // Validate if an update is needed for the list
                                         if (
                                             currentChapters.isNotEmpty() &&
-                                            currentChapters.first().storyId == matchChaptersUrl.groupValues[1].toInt() &&
+                                            currentChapters.first().storyId == storyId &&
                                             currentChapters.size == elements.size
                                         ) {
                                             return@launch
@@ -299,7 +322,7 @@ class MainActivity : ComponentActivity() {
                                             currentChapters.add(
                                                 Chapter(
                                                     id = tokens.groupValues[2].toInt(),
-                                                    storyId = currentStory!!.id,
+                                                    storyId = storyId,
                                                     order = i,
                                                     title = cLink.text().trim(),
                                                     url = cLink.attr("href"),
@@ -309,15 +332,21 @@ class MainActivity : ComponentActivity() {
                                             )
                                             i++
                                         }
+                                        
+                                        // Persist chapters if story is in library
+                                        if (storyDao.getById(storyId) != null) {
+                                            chapterDao.insertAll(currentChapters.toList())
+                                        }
                                         return@launch
                                     }
 
                                     // Process if txt URL
-                                    if (regexTxt.containsMatchIn(currentUrl)) {
+                                    if (regexTxt.containsMatchIn(loadedUrl)) {
                                         // Parse chapter page here
-                                        val chapterDate = dateTimeFormat.parse(
-                                            doc.selectFirst("div.txtinfo > span")?.text()!!
-                                        )
+                                        val chapterDateStr = doc.selectFirst("div.txtinfo > span")?.text()
+                                        val chapterDate = if (chapterDateStr != null) {
+                                            try { dateTimeFormat.parse(chapterDateStr) } catch (e: Exception) { null }
+                                        } else null
 
                                         // Preserve newlines from <p> and <br> tags
                                         val contentElement = doc.selectFirst("div#txtcontent0")?.text()
@@ -325,11 +354,25 @@ class MainActivity : ComponentActivity() {
 
                                         // Update the currentChapter state with a new object to trigger recomposition
                                         currentChapter?.let {
-                                            if (it.url == currentUrl) {
-                                                currentChapter = it.copy(
+                                            if (it.url == loadedUrl) {
+                                                val updatedChapter = it.copy(
                                                     uploadedAt = chapterDate,
                                                     content = chapterContent
                                                 )
+                                                currentChapter = updatedChapter
+                                                
+                                                // Also update in the list to cache it
+                                                val index = currentChapters.indexOfFirst { c -> c.url == loadedUrl }
+                                                if (index != -1) {
+                                                    currentChapters[index] = updatedChapter
+                                                }
+                                                
+                                                // Persist if story is in library
+                                                currentStory?.let { story ->
+                                                    if (storyDao.getById(story.id) != null) {
+                                                        chapterDao.insertAll(listOf(updatedChapter))
+                                                    }
+                                                }
                                             }
                                         }
 
@@ -432,37 +475,60 @@ class MainActivity : ComponentActivity() {
                     suspend fun performTranslation(texts: List<String>): List<String> {
                         if (texts.isEmpty()) return emptyList()
 
-                        return if (useExternalTranslator) {
-                            val payload = listOf(
-                                listOf(
-                                    texts,
-                                    "zh",
-                                    targetLanguage
-                                ),
-                                "wt_lib"
-                            )
-                            val response = translationService.translateHtml(
-                                apiKey = translatorApiKey,
-                                userAgent = userAgent.ifEmpty { webView.settings.userAgentString },
-                                body = payload
-                            )
-                            try {
-                                val jsonResponse = JSONArray(response)
-                                val translations = jsonResponse.getJSONArray(0)
-                                List(translations.length()) { i ->
-                                    val translatedText = translations.getString(i)
-                                    HtmlCompat.fromHtml(translatedText, HtmlCompat.FROM_HTML_MODE_LEGACY).toString()
+                        // Using larger chunks for titles to reduce overhead
+                        val chunkSize = if (useExternalTranslator) 100 else 250
+                        val results = mutableListOf<String>()
+
+                        for (chunk in texts.chunked(chunkSize)) {
+                            val chunkResults = if (useExternalTranslator) {
+                                val payload = listOf(
+                                    listOf(chunk, "zh", targetLanguage),
+                                    "wt_lib"
+                                )
+                                try {
+                                    val response = translationService.translateHtml(
+                                        apiKey = translatorApiKey,
+                                        userAgent = userAgent.ifEmpty { webView.settings.userAgentString },
+                                        body = payload
+                                    )
+                                    val jsonResponse = JSONArray(response)
+                                    val translations = jsonResponse.getJSONArray(0)
+                                    List(translations.length()) { i ->
+                                        val translatedText = translations.getString(i)
+                                        HtmlCompat.fromHtml(translatedText, HtmlCompat.FROM_HTML_MODE_LEGACY).toString()
+                                    }
+                                } catch (e: Exception) {
+                                    Log.e("Translate", "Error in external translation chunk", e)
+                                    if (e is retrofit2.HttpException && e.code() == 429) {
+                                        delay(5000) // Back off on rate limit
+                                    }
+                                    chunk
                                 }
-                            } catch (e: Exception) {
-                                Log.e("Translate", "Error parsing translation response", e)
-                                texts
+                            } else {
+                                try {
+                                    val delimiter = " [|] "
+                                    val combinedText = chunk.joinToString(delimiter)
+                                    val translatedCombined = translator.translate(combinedText).await()
+                                    translatedCombined.split(delimiter).map { it.trim() }
+                                } catch (e: Exception) {
+                                    Log.e("Translate", "Error in internal translation chunk", e)
+                                    chunk
+                                }
                             }
-                        } else {
-                            val delimiter = " [|] "
-                            val combinedText = texts.joinToString(delimiter)
-                            val translatedCombined = translator.translate(combinedText).await()
-                            translatedCombined.split(delimiter).map { it.trim() }
+                            
+                            // Align sizes
+                            val adjustedResults = if (chunkResults.size < chunk.size) {
+                                chunkResults + chunk.drop(chunkResults.size)
+                            } else {
+                                chunkResults.take(chunk.size)
+                            }
+                            results.addAll(adjustedResults)
+                            
+                            if (texts.size > chunkSize) {
+                                delay(1500) // Delay between batches
+                            }
                         }
+                        return results
                     }
 
                     // State for Story in DB
@@ -478,8 +544,13 @@ class MainActivity : ComponentActivity() {
                                 navigateTo(ViewState.STORY)
                             else if (regexChapters.find(currentUrl) != null)
                                 navigateTo(ViewState.CHAPTER_LIST)
-                            else if (regexTxt.find(currentUrl) != null)
+                            else if (regexTxt.find(currentUrl) != null) {
+                                // Ensure currentChapter is set correctly
+                                if (currentChapter?.url != currentUrl) {
+                                    currentChapter = currentChapters.find { c -> c.url == currentUrl }
+                                }
                                 navigateTo(ViewState.CHAPTER)
+                            }
                         }else{
                             navigateTo(ViewState.BROWSER)
                         }
@@ -639,14 +710,21 @@ class MainActivity : ComponentActivity() {
                                                 }
                                             }
                                             ViewState.CHAPTER_LIST -> {
+                                                val storyId = currentStory?.id ?: return@launch
                                                 if (currentChapters.isEmpty()) return@launch
+                                                
                                                 if (isListTranslating) return@launch
 
-                                                isListTranslating = true
-                                                try {
+                                                listTranslationJob?.cancel()
+                                                listTranslationJob = scope.launch {
+                                                    // 1. Sync DB
+                                                    val existingLocales = chapterDao.getLocalesForStory(storyId, targetLanguage)
+                                                    val existingIdsInState = translatedChapters.map { it.chapterId }.toSet()
+                                                    val toAdd = existingLocales.filter { it.chapterId !in existingIdsInState }
+                                                    if (toAdd.isNotEmpty()) translatedChapters.addAll(toAdd)
+                                                    
                                                     // Ensure memory matches current story
-                                                    val currentStoryId = currentStory?.id
-                                                    if (currentStoryId != null && translatedChapters.isNotEmpty()) {
+                                                    if (translatedChapters.isNotEmpty()) {
                                                         val firstTranslated = translatedChapters.first()
                                                         val matchesCurrent = currentChapters.any { it.id == firstTranslated.chapterId }
                                                         if (!matchesCurrent) {
@@ -655,62 +733,51 @@ class MainActivity : ComponentActivity() {
                                                         }
                                                     }
 
-                                                    // Batch translation for chapter titles
-                                                    val potentialChapters = currentChapters.filter { chapter ->
-                                                        translatedChapters.none { it.chapterId == chapter.id } && !translatingIds.contains(chapter.id)
-                                                    }
+                                                    isListTranslating = true
+                                                    try {
+                                                        // Identify missing chapters globally
+                                                        val potentialChapters = currentChapters.filter { chapter ->
+                                                            translatedChapters.none { it.chapterId == chapter.id } && !translatingIds.contains(chapter.id)
+                                                        }
 
-                                                    if (potentialChapters.isNotEmpty()) {
-                                                        scope.launch {
-                                                            // Filter out those that already exist in the Database
-                                                            val chaptersToTranslate = potentialChapters.filter { chapter ->
-                                                                val existing = chapterDao.getLocaleByChapterId(chapter.id, targetLanguage)
-                                                                if (existing != null) {
-                                                                    translatedChapters.add(existing)
-                                                                    false
-                                                                } else {
-                                                                    true
-                                                                }
+                                                        if (potentialChapters.isNotEmpty()) {
+                                                            // Process entire story's chapters in one large logical task
+                                                            val titles = potentialChapters.map { it.title }
+                                                            val translatedTitles = performTranslation(titles)
+
+                                                            val newLocales = potentialChapters.mapIndexed { index, chapter ->
+                                                                ChapterLocale(
+                                                                    chapterId = chapter.id,
+                                                                    language = targetLanguage,
+                                                                    title = translatedTitles.getOrElse(index) { chapter.title },
+                                                                    content = emptyList()
+                                                                )
                                                             }
+                                                            
+                                                            // One single bulk UI update to prevent flicker/lag
+                                                            translatedChapters.addAll(newLocales)
 
-                                                            if (chaptersToTranslate.isNotEmpty()) {
-                                                                chaptersToTranslate.forEach { translatingIds.add(it.id) }
-                                                                try {
-                                                                    val titles = chaptersToTranslate.map { it.title }
-                                                                    val translatedTitles = performTranslation(titles)
-
-                                                                    chaptersToTranslate.forEachIndexed { index, chapter ->
-                                                                        val tTitle = translatedTitles.getOrElse(index) { chapter.title }
-                                                                        val newLocale = ChapterLocale(
-                                                                            chapterId = chapter.id,
-                                                                            language = targetLanguage,
-                                                                            title = tTitle,
-                                                                            content = emptyList()
-                                                                        )
-                                                                        translatedChapters.add(newLocale)
-
-                                                                        // Only save to DB if chapter exists in DB
-                                                                        if (chapterDao.getById(chapter.id) != null) {
-                                                                            chapterDao.insertLocale(newLocale)
-                                                                        }
+                                                            // Background persist
+                                                            scope.launch {
+                                                                newLocales.forEach { locale ->
+                                                                    // Verify parent chapter exists in DB before inserting locale to avoid FK constraint failure
+                                                                    if (chapterDao.getById(locale.chapterId) != null) {
+                                                                        chapterDao.insertLocale(locale)
                                                                     }
-                                                                } catch (e: Exception) {
-                                                                    Log.e("Translate", "Error translating chapter titles", e)
-                                                                } finally {
-                                                                    chaptersToTranslate.forEach { translatingIds.remove(it.id) }
                                                                 }
                                                             }
                                                         }
+                                                    } catch (e: Exception) {
+                                                        Log.e("Translate", "Error translating chapter titles", e)
+                                                    } finally {
+                                                        isListTranslating = false
                                                     }
-                                                } finally {
-                                                    isListTranslating = false
                                                 }
                                             }
                                             ViewState.CHAPTER -> {
                                                 val chapter = currentChapter ?: return@launch
-                                                if (chapter.content.isEmpty()) return@launch // Wait for content
+                                                if (chapter.content.isEmpty()) return@launch
 
-                                                // Check memory first
                                                 val memoryLocale = translatedChapters.find { it.chapterId == chapter.id }
                                                 val isFullyTranslated = memoryLocale != null &&
                                                                         memoryLocale.content.isNotEmpty() &&
@@ -723,7 +790,6 @@ class MainActivity : ComponentActivity() {
                                                 translatingIds.add(chapter.id)
                                                 scope.launch {
                                                     try {
-                                                        // 2. Check DB first
                                                         val existingLocale = chapterDao.getLocaleByChapterId(chapter.id, targetLanguage)
                                                         if (existingLocale != null && existingLocale.content.isNotEmpty() && existingLocale.content.size == chapter.content.size) {
                                                             val idx = translatedChapters.indexOfFirst { it.chapterId == chapter.id }
@@ -732,22 +798,12 @@ class MainActivity : ComponentActivity() {
                                                             return@launch
                                                         }
 
-                                                        // 3. Translate
                                                         val originalContent = chapter.content
-                                                        // Ensure we have an entry in memory for fallback
                                                         val idx = translatedChapters.indexOfFirst { it.chapterId == chapter.id }
                                                         if (idx == -1) {
-                                                            translatedChapters.add(ChapterLocale(
-                                                                chapterId = chapter.id,
-                                                                language = targetLanguage,
-                                                                title = chapter.title,
-                                                                content = originalContent
-                                                            ))
-                                                        } else if (translatedChapters[idx].content.isEmpty()) {
-                                                            translatedChapters[idx] = translatedChapters[idx].copy(content = originalContent)
+                                                            translatedChapters.add(ChapterLocale(chapterId = chapter.id, language = targetLanguage, title = chapter.title, content = originalContent))
                                                         }
 
-                                                        // Batch translate title and content
                                                         val contentToTranslate = listOf(chapter.title) + originalContent
                                                         val translatedResults = performTranslation(contentToTranslate)
                                                         
@@ -756,13 +812,8 @@ class MainActivity : ComponentActivity() {
 
                                                         val updateIdx = translatedChapters.indexOfFirst { it.chapterId == chapter.id }
                                                         if (updateIdx != -1) {
-                                                            val updatedLocale = translatedChapters[updateIdx].copy(
-                                                                title = tTitle,
-                                                                content = tContent
-                                                            )
+                                                            val updatedLocale = translatedChapters[updateIdx].copy(title = tTitle, content = tContent)
                                                             translatedChapters[updateIdx] = updatedLocale
-
-                                                            // Save to DB
                                                             if (chapterDao.getById(chapter.id) != null) {
                                                                 chapterDao.insertLocale(updatedLocale)
                                                             }
@@ -777,44 +828,45 @@ class MainActivity : ComponentActivity() {
                                             ViewState.STORY_LIST -> {
                                                 if (isLibraryTranslating) return@launch
                                                 isLibraryTranslating = true
-                                                try {
-                                                    allStories.forEach { story ->
+                                                libraryTranslationJob?.cancel()
+                                                libraryTranslationJob = scope.launch {
+                                                    // Quick pass for database items
+                                                    for (story in allStories) {
                                                         if (allTranslatedStories.none { it.storyId == story.id }) {
-                                                            scope.launch {
+                                                            val existing = storyDao.getLocaleByStoryId(story.id, targetLanguage)
+                                                            if (existing != null) {
+                                                                allTranslatedStories.add(existing)
+                                                            }
+                                                        }
+                                                    }
+                                                    
+                                                    try {
+                                                        for (story in allStories) {
+                                                            if (allTranslatedStories.none { it.storyId == story.id }) {
                                                                 try {
-                                                                    // Check DB first
-                                                                    val existing = storyDao.getLocaleByStoryId(story.id, targetLanguage)
-                                                                    if (existing != null) {
-                                                                        allTranslatedStories.add(existing)
-                                                                    } else {
-                                                                        // Translate story details
-                                                                        val storyDetails = listOf(
-                                                                            story.title,
-                                                                            story.genre,
-                                                                            story.description,
-                                                                            if (story.tags.isEmpty()) "" else story.tags.joinToString(", ")
-                                                                        )
-                                                                        val results = performTranslation(storyDetails)
+                                                                    // Translate story details (network)
+                                                                    val storyDetails = listOf(story.title, story.genre, story.description, if (story.tags.isEmpty()) "" else story.tags.joinToString(", "))
+                                                                    val results = performTranslation(storyDetails)
 
-                                                                        val newLocale = StoryLocale(
-                                                                            storyId = story.id,
-                                                                            language = targetLanguage,
-                                                                            title = results.getOrElse(0) { story.title },
-                                                                            genre = results.getOrElse(1) { story.genre },
-                                                                            description = results.getOrElse(2) { story.description },
-                                                                            tags = results.getOrElse(3) { "" }
-                                                                        )
-                                                                        allTranslatedStories.add(newLocale)
-                                                                        storyDao.insertLocale(newLocale)
-                                                                    }
+                                                                    val newLocale = StoryLocale(
+                                                                        storyId = story.id,
+                                                                        language = targetLanguage,
+                                                                        title = results.getOrElse(0) { story.title },
+                                                                        genre = results.getOrElse(1) { story.genre },
+                                                                        description = results.getOrElse(2) { story.description },
+                                                                        tags = results.getOrElse(3) { "" }
+                                                                    )
+                                                                    allTranslatedStories.add(newLocale)
+                                                                    storyDao.insertLocale(newLocale)
+                                                                    delay(2000)
                                                                 } catch (e: Exception) {
                                                                     Log.e("Translate", "Error translating story in library", e)
                                                                 }
                                                             }
                                                         }
+                                                    } finally {
+                                                        isLibraryTranslating = false
                                                     }
-                                                } finally {
-                                                    isLibraryTranslating = false
                                                 }
                                             }
                                             ViewState.BROWSER -> {}
@@ -841,7 +893,6 @@ class MainActivity : ComponentActivity() {
                             currentStory?.let { story ->
                                 storyDao.insert(story)
                                 isCurrentStorySaved = true
-                                // Also save the translated story if it exists
                                 translatedStory?.let { locale ->
                                     if (locale.storyId == story.id) {
                                         storyDao.insertLocale(locale)
@@ -851,8 +902,6 @@ class MainActivity : ComponentActivity() {
                                 currentChapters.forEach { chapter ->
                                     chapter.storyId = story.id
                                     chapterDao.insertAll(listOf(chapter))
-                                    
-                                    // Also save any existing translation for this chapter
                                     translatedChapters.find { it.chapterId == chapter.id }?.let { locale ->
                                         chapterDao.insertLocale(locale)
                                     }
@@ -861,15 +910,29 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    // This effect will run whenever the view changes. If translation is enabled,
-                    // it will automatically trigger the translation for the new view.
                     LaunchedEffect(currentViewState, showTranslate, currentStory, currentChapters.size, currentChapter, useExternalTranslator) {
                         if (showTranslate) {
                             onTranslate(true)
                         }
                     }
 
-                    // Back Handler
+                    LaunchedEffect(currentViewState, currentStory, currentChapters.size) {
+                        if (currentViewState == ViewState.CHAPTER_LIST && currentStory != null && currentChapters.isNotEmpty()) {
+                            if (currentStory!!.id != lastScrolledStoryId) {
+                                val bookmarkId = currentStory!!.bookmarkedChapterId
+                                if (bookmarkId != null) {
+                                    val index = currentChapters.indexOfFirst { it.id == bookmarkId }
+                                    if (index != -1) {
+                                        chapterListState.scrollToItem(index)
+                                    }
+                                } else {
+                                    chapterListState.scrollToItem(0)
+                                }
+                                lastScrolledStoryId = currentStory!!.id
+                            }
+                        }
+                    }
+
                     BackHandler(enabled = true) {
                         showTopBar = true
                         when(currentViewState) {
@@ -890,7 +953,6 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    // Layout
                     Column {
                         if (currentViewState != ViewState.CHAPTER || showTopBar) {
                             TopAppBar(
@@ -925,7 +987,7 @@ class MainActivity : ComponentActivity() {
                                         enabled = showTranslate
                                     ) {
                                         Icon(
-                                            painter = painterResource(id = R.drawable.sort_24px),
+                                            painter = painterResource(id = R.drawable.cloud_download_24px),
                                             contentDescription = "External Translator",
                                             tint = if (useExternalTranslator) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                                         )
@@ -953,63 +1015,76 @@ class MainActivity : ComponentActivity() {
                             )
                         }
 
-                        // Check one of the views
-                        when (currentViewState) {
-                            ViewState.STORY -> 
-                                currentStory?.let {
-                                    StoryView(
-                                        story = it,
-                                        isSaved = isCurrentStorySaved,
-                                        showTranslate = showTranslate,
-                                        translatedStory = translatedStory,
-                                        onChapterClick = onShowChapters,
-                                        onSave = onSave,
-                                        onDelete = { onDeleteStory(it) }
-                                    )
+                        Box(modifier = Modifier.weight(1f)) {
+                            BrowserView(
+                                webView = webView,
+                                modifier = Modifier.fillMaxSize()
+                            )
+
+                            if (currentViewState != ViewState.BROWSER) {
+                                Surface(
+                                    modifier = Modifier.fillMaxSize(),
+                                    color = MaterialTheme.colorScheme.background
+                                ) {
+                                    when (currentViewState) {
+                                        ViewState.STORY -> 
+                                            currentStory?.let {
+                                                StoryView(
+                                                    story = it,
+                                                    isSaved = isCurrentStorySaved,
+                                                    showTranslate = showTranslate,
+                                                    translatedStory = translatedStory,
+                                                    onChapterClick = onShowChapters,
+                                                    onSave = onSave,
+                                                    onDelete = { onDeleteStory(it) }
+                                                )
+                                            }
+                                        ViewState.CHAPTER_LIST -> 
+                                            ChapterListView(
+                                                chapters = currentChapters,
+                                                bookmarkedChapterId = currentStory?.bookmarkedChapterId,
+                                                showTranslate = showTranslate,
+                                                translatedChapters = translatedChapters,
+                                                onClickChapter = onShowChapter,
+                                                onBackToStoryClick = onBackToStory,
+                                                listState = chapterListState
+                                            )
+                                        ViewState.CHAPTER -> 
+                                            currentChapter?.let {
+                                                ChapterView(
+                                                    chapter = it,
+                                                    isBookmarked = it.id == currentStory?.bookmarkedChapterId,
+                                                    showTranslate = showTranslate,
+                                                    translatedChapter = translatedChapters.find { tChap -> tChap.chapterId == it.id },
+                                                    fontSize = chapterFontSize,
+                                                    onFontSizeChange = { newSize -> 
+                                                        chapterFontSize = newSize
+                                                        scope.launch { settingsManager.setChapterFontSize(newSize) }
+                                                    },
+                                                    onBookmarkClick = onToggleBookmark,
+                                                    onPreviousClick = onPreviousChapter,
+                                                    onNextClick = onNextChapter,
+                                                    onBackClick = onShowChapters,
+                                                    onToggleBars = { visible -> showTopBar = visible }
+                                                )
+                                            }
+                                        ViewState.STORY_LIST ->
+                                            StoryListView(
+                                                stories = allStories,
+                                                showTranslate = showTranslate,
+                                                translatedStories = allTranslatedStories,
+                                                onBackClick = { currentViewState = ViewState.BROWSER },
+                                                onStoryClick = { story ->
+                                                    currentStory = story
+                                                    webView.loadUrl(story.url)
+                                                    currentViewState = ViewState.STORY
+                                                },
+                                                onDeleteStory = onDeleteStory
+                                            )
+                                        ViewState.BROWSER -> {}
+                                    }
                                 }
-                            ViewState.CHAPTER_LIST -> 
-                                ChapterListView(
-                                    chapters = currentChapters,
-                                    bookmarkedChapterId = currentStory?.bookmarkedChapterId,
-                                    showTranslate = showTranslate,
-                                    translatedChapters = translatedChapters,
-                                    onClickChapter = onShowChapter,
-                                    onBackToStoryClick = onBackToStory
-                                )
-                            ViewState.CHAPTER -> 
-                                currentChapter?.let {
-                                    ChapterView(
-                                        chapter = it,
-                                        isBookmarked = it.id == currentStory?.bookmarkedChapterId,
-                                        showTranslate = showTranslate,
-                                        translatedChapter = translatedChapters.find { tChap -> tChap.chapterId == it.id },
-                                        fontSize = chapterFontSize,
-                                        onFontSizeChange = { newSize -> 
-                                            chapterFontSize = newSize
-                                            scope.launch { settingsManager.setChapterFontSize(newSize) }
-                                        },
-                                        onBookmarkClick = onToggleBookmark,
-                                        onPreviousClick = onPreviousChapter,
-                                        onNextClick = onNextChapter,
-                                        onBackClick = onShowChapters,
-                                        onToggleBars = { visible -> showTopBar = visible }
-                                    )
-                                }
-                            ViewState.STORY_LIST ->
-                                StoryListView(
-                                    stories = allStories,
-                                    showTranslate = showTranslate,
-                                    translatedStories = allTranslatedStories,
-                                    onBackClick = { currentViewState = ViewState.BROWSER },
-                                    onStoryClick = { story ->
-                                        currentStory = story
-                                        webView.loadUrl(story.url)
-                                        currentViewState = ViewState.STORY
-                                    },
-                                    onDeleteStory = onDeleteStory
-                                )
-                            ViewState.BROWSER -> 
-                                BrowserView(webView = webView)
+                            }
                         }
                     }
                 }

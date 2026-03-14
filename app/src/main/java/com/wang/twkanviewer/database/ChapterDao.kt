@@ -23,4 +23,7 @@ interface ChapterDao {
 
     @Query("SELECT * FROM chapter_locales WHERE chapter_id = :id AND language = :language")
     suspend fun getLocaleByChapterId(id: Int, language: String): ChapterLocale?
+
+    @Query("SELECT cl.* FROM chapter_locales cl JOIN chapters c ON cl.chapter_id = c.id WHERE c.story_id = :storyId AND cl.language = :language")
+    suspend fun getLocalesForStory(storyId: Int, language: String): List<ChapterLocale>
 }
