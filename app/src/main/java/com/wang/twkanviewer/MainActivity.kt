@@ -811,14 +811,19 @@ class MainActivity : ComponentActivity() {
                                                                 )
                                                             }
 
-                                                            val existingIds = translatedChapters.map { it.chapterId }.toSet()
-                                                            val dedupedLocales = newLocales.filter { it.chapterId !in existingIds }
-                                                            translatedChapters.addAll(dedupedLocales)
+                                                            translatedChapters.addAll(newLocales)
 
-                                                            scope.launch {
-                                                                newLocales.forEach { locale ->
-                                                                    if (chapterDao.getById(locale.chapterId) != null) {
-                                                                        chapterDao.insertLocale(locale)
+                                                            // Only persist if job is still active
+                                                            if (coroutineContext.isActive) {
+                                                                scope.launch {
+                                                                    newLocales.forEach { locale ->
+                                                                        try {
+                                                                            if (chapterDao.getById(locale.chapterId) != null) {
+                                                                                chapterDao.insertLocale(locale)
+                                                                            }
+                                                                        } catch (e: android.database.sqlite.SQLiteConstraintException) {
+                                                                            Log.w("Translate", "Skipping locale insert, parent chapter gone: ${locale.chapterId}", e)
+                                                                        }
                                                                     }
                                                                 }
                                                             }
@@ -947,6 +952,17 @@ class MainActivity : ComponentActivity() {
                             } else {
                                 startTranslation()
                             }
+                        }
+                    }
+
+                    LaunchedEffect(currentViewState) {
+                        if (currentViewState != ViewState.CHAPTER_LIST) {
+                            listTranslationJob?.cancel()
+                            isListTranslating = false
+                        }
+                        if (currentViewState != ViewState.STORY_LIST) {
+                            libraryTranslationJob?.cancel()
+                            isLibraryTranslating = false
                         }
                     }
 
