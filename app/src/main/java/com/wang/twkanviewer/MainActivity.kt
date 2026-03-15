@@ -13,11 +13,9 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
@@ -66,6 +64,7 @@ import com.wang.twkanviewer.ui.components.StoryView
 import com.wang.twkanviewer.ui.theme.TWKANViewerTheme
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import org.json.JSONArray
@@ -126,6 +125,7 @@ class MainActivity : ComponentActivity() {
                     var showTopBar by remember { mutableStateOf(true) }
                     var currentViewState by remember { mutableStateOf(ViewState.BROWSER) }
                     val currentChapters = remember { mutableStateListOf<Chapter>() }
+                    var visibleChapterIds by remember { mutableStateOf(emptySet<Int>()) }
                     var currentStory by remember { mutableStateOf<Story?>(null) }
                     var currentChapter by remember { mutableStateOf<Chapter?>(null) }
                     val allStories = remember { mutableStateListOf<Story>() }
@@ -351,7 +351,7 @@ class MainActivity : ComponentActivity() {
                                         }
                                         
                                         // Avoid UI flicker: only update if data changed
-                                        if (allChapters.size != currentChapters.size || (allChapters.isNotEmpty() && currentChapters.isNotEmpty() && allChapters.first().id != currentChapters.first().id)) {
+                                        if (allChapters.size != currentChapters.size || (allChapters.isNotEmpty() && allChapters.first().id != currentChapters.first().id)) {
                                             currentChapters.clear()
                                             currentChapters.addAll(allChapters)
                                         }
@@ -558,7 +558,7 @@ class MainActivity : ComponentActivity() {
                         isCurrentStorySaved = currentStory?.let { storyDao.getById(it.id) != null } ?: false
                     }
                     
-                    // Pre-load data from DB when story or language changes
+                    // Preload data from DB when story or language changes
                     LaunchedEffect(currentStory?.id, targetLanguage) {
                         val storyId = currentStory?.id ?: return@LaunchedEffect
                         
@@ -766,35 +766,43 @@ class MainActivity : ComponentActivity() {
                                             }
                                             ViewState.CHAPTER_LIST -> {
                                                 val storyId = currentStory?.id ?: return@launch
-                                                if (currentChapters.isEmpty()) return@launch
-                                                
                                                 if (isListTranslating) return@launch
 
                                                 listTranslationJob?.cancel()
                                                 listTranslationJob = scope.launch {
-                                                    // Only clear if the story actually changed
                                                     if (lastTranslatedStoryId != storyId) {
                                                         translatedChapters.clear()
                                                         translatingIds.clear()
-                                                        
+
                                                         val existingLocales = chapterDao.getLocalesForStory(storyId, targetLanguage)
-                                                        translatedChapters.addAll(existingLocales)
+                                                        val seenIds = mutableSetOf<Int>()
+                                                        val dedupedExisting = existingLocales.filter { seenIds.add(it.chapterId) }
+                                                        translatedChapters.addAll(dedupedExisting)
                                                         lastTranslatedStoryId = storyId
                                                     }
 
                                                     isListTranslating = true
                                                     try {
-                                                        // Identify missing chapters globally
-                                                        val potentialChapters = currentChapters.filter { chapter ->
-                                                            translatedChapters.none { it.chapterId == chapter.id } && !translatingIds.contains(chapter.id)
+                                                        val translatedIds = translatedChapters.map { it.chapterId }.toSet()
+                                                        val untranslated = currentChapters.filter { chapter ->
+                                                            chapter.id !in translatedIds && !translatingIds.contains(chapter.id)
                                                         }
 
-                                                        if (potentialChapters.isNotEmpty()) {
-                                                            // Process entire story's chapters in one large logical task
-                                                            val titles = potentialChapters.map { it.title }
+                                                        if (untranslated.isEmpty()) return@launch
+
+                                                        val (visibleFirst, remainder) = untranslated.partition {
+                                                            it.id in visibleChapterIds
+                                                        }
+                                                        val prioritized = visibleFirst + remainder
+
+                                                        val chunkSize = if (useExternalTranslator) 50 else 100
+                                                        for (chunk in prioritized.chunked(chunkSize)) {
+                                                            if (!isActive) break
+
+                                                            val titles = chunk.map { it.title }
                                                             val translatedTitles = performTranslation(titles)
 
-                                                            val newLocales = potentialChapters.mapIndexed { index, chapter ->
+                                                            val newLocales = chunk.mapIndexed { index, chapter ->
                                                                 ChapterLocale(
                                                                     chapterId = chapter.id,
                                                                     language = targetLanguage,
@@ -802,18 +810,21 @@ class MainActivity : ComponentActivity() {
                                                                     content = emptyList()
                                                                 )
                                                             }
-                                                            
-                                                            // One single bulk UI update to prevent flicker/lag
-                                                            translatedChapters.addAll(newLocales)
 
-                                                            // Background persist
+                                                            val existingIds = translatedChapters.map { it.chapterId }.toSet()
+                                                            val dedupedLocales = newLocales.filter { it.chapterId !in existingIds }
+                                                            translatedChapters.addAll(dedupedLocales)
+
                                                             scope.launch {
                                                                 newLocales.forEach { locale ->
-                                                                    // Verify parent chapter exists in DB before inserting locale to avoid FK constraint failure
                                                                     if (chapterDao.getById(locale.chapterId) != null) {
                                                                         chapterDao.insertLocale(locale)
                                                                     }
                                                                 }
+                                                            }
+
+                                                            if (prioritized.size > chunkSize) {
+                                                                delay(300)
                                                             }
                                                         }
                                                     } catch (e: Exception) {
@@ -939,7 +950,9 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    LaunchedEffect(currentViewState, showTranslate, currentStory, currentChapters.size, currentChapter, useExternalTranslator) {
+                    LaunchedEffect(currentViewState, showTranslate, currentStory, currentChapters.size,
+                        currentChapter, useExternalTranslator, translatedChapters.size,
+                        visibleChapterIds) {
                         if (showTranslate) {
                             onTranslate(true)
                         }
@@ -1092,7 +1105,7 @@ class MainActivity : ComponentActivity() {
                                                     onDelete = { onDeleteStory(it) }
                                                 )
                                             }
-                                        ViewState.CHAPTER_LIST -> 
+                                        ViewState.CHAPTER_LIST ->
                                             ChapterListView(
                                                 chapters = currentChapters,
                                                 bookmarkedChapterId = currentStory?.bookmarkedChapterId,
@@ -1100,6 +1113,7 @@ class MainActivity : ComponentActivity() {
                                                 translatedChapters = translatedChapters,
                                                 onClickChapter = onShowChapter,
                                                 onBackToStoryClick = onBackToStory,
+                                                onVisibleIdsChange = { visibleChapterIds = it },
                                                 listState = chapterListState
                                             )
                                         ViewState.CHAPTER -> 

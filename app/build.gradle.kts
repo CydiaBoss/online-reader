@@ -1,8 +1,16 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     id("com.google.devtools.ksp")
+}
+
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localProperties.load(localPropertiesFile.inputStream())
 }
 
 android {
@@ -17,6 +25,9 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        val apiKey = localProperties.getProperty("TRANSLATOR_API_KEY") ?: ""
+        buildConfigField("String", "TRANSLATOR_API_KEY", "\"$apiKey\"")
     }
 
     buildTypes {
@@ -37,15 +48,12 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     packaging {
         resources.excludes += "META-INF/DEPENDENCIES"
         resources.excludes += "mozilla/public-suffix-list.txt"
-        // You might need to exclude other META-INF files as well,
-        // depending on the specific error message, e.g.,
-        // exclude '''META-INF/LICENSE'''
-        // exclude '''META-INF/NOTICE'''
     }
 }
 

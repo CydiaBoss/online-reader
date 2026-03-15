@@ -40,7 +40,7 @@ class SettingsManager(private val context: Context) {
 
     val translatorApiKey: Flow<String> = context.dataStore.data
         .map { preferences ->
-            preferences[TRANSLATOR_API_KEY] ?: ""
+            preferences[TRANSLATOR_API_KEY] ?: BuildConfig.TRANSLATOR_API_KEY
         }
 
     val userAgent: Flow<String> = context.dataStore.data

@@ -26,6 +26,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -51,6 +52,7 @@ fun ChapterListView(
     translatedChapters: List<ChapterLocale>,
     onBackToStoryClick: () -> Unit,
     onClickChapter: (Chapter) -> Unit,
+    onVisibleIdsChange: (Set<Int>) -> Unit = {},
     listState: LazyListState = rememberLazyListState()
 ) {
     var searchQuery by remember { mutableStateOf("") }
@@ -59,7 +61,7 @@ fun ChapterListView(
     val coroutineScope = rememberCoroutineScope()
     
     // Memoize the translation map to avoid O(N*M) lookups during recomposition
-    val translationMap by remember(translatedChapters, showTranslate) {
+    val translationMap by remember(translatedChapters.size, showTranslate) {
         derivedStateOf {
             if (showTranslate) {
                 translatedChapters.associateBy { it.chapterId }
@@ -69,26 +71,39 @@ fun ChapterListView(
 
     val processedList by remember(chapters, translationMap, searchQuery, isDescending) {
         derivedStateOf {
-            // 1. Map to pairs with translation (using pre-built map)
             val mapped = chapters.map { chapter ->
                 chapter to translationMap[chapter.id]?.title
             }
 
-            // 2. Filter by search
             val filtered = if (searchQuery.isEmpty()) mapped else {
                 mapped.filter { (chapter, translated) ->
                     chapter.title.contains(searchQuery, ignoreCase = true) ||
-                    (translated?.contains(searchQuery, ignoreCase = true) == true)
+                            (translated?.contains(searchQuery, ignoreCase = true) == true)
                 }
             }
 
-            // 3. Sort
-            if (isDescending) {
+            val sorted = if (isDescending) {
                 filtered.sortedByDescending { it.first.order }
             } else {
                 filtered.sortedBy { it.first.order }
             }
+
+            // Deduplicate by chapter id as a final safety net
+            val seenIds = mutableSetOf<Int>()
+            sorted.filter { (chapter, _) -> seenIds.add(chapter.id) }
         }
+    }
+
+    val visibleChapterIds by remember(listState, processedList) {
+        derivedStateOf {
+            listState.layoutInfo.visibleItemsInfo.mapNotNull { item ->
+                processedList.getOrNull(item.index)?.first?.id
+            }.toSet()
+        }
+    }
+
+    LaunchedEffect(visibleChapterIds) {
+        onVisibleIdsChange(visibleChapterIds)
     }
 
     Column(
