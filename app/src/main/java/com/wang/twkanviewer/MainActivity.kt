@@ -1001,13 +1001,6 @@ class MainActivity : ComponentActivity() {
                                     )
                                 },
                                 actions = {
-                                    IconButton(onClick = onShowLibrary) {
-                                        Icon(
-                                            painter = painterResource(id = R.drawable.twkan_icon_foreground),
-                                            contentDescription = stringResource(id = R.string.library_content_description),
-                                            modifier = Modifier.size(24.dp)
-                                        )
-                                    }
                                     val isScrappedView = currentViewState != ViewState.BROWSER && currentViewState != ViewState.STORY_LIST && currentViewState != ViewState.SETTINGS
                                     IconToggleButton(
                                         checked = isScrappedView,
@@ -1019,7 +1012,6 @@ class MainActivity : ComponentActivity() {
                                             contentDescription = stringResource(id = R.string.scrapper_content_description)
                                         )
                                     }
-                                    Spacer(Modifier.width(4.dp))
                                     IconToggleButton(
                                         checked = showTranslate,
                                         onCheckedChange = onTranslate,
@@ -1028,6 +1020,13 @@ class MainActivity : ComponentActivity() {
                                         Icon(
                                             painter = painterResource(id = R.drawable.translate_24px),
                                             contentDescription = stringResource(id = R.string.translator_content_description)
+                                        )
+                                    }
+                                    IconButton(onClick = onShowLibrary) {
+                                        Icon(
+                                            painter = painterResource(id = R.drawable.library_books_24px),
+                                            contentDescription = stringResource(id = R.string.library_content_description),
+                                            modifier = Modifier.size(24.dp)
                                         )
                                     }
                                     IconButton(onClick = { navigateTo(ViewState.SETTINGS) }) {

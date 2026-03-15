@@ -2,11 +2,13 @@ package com.wang.twkanviewer.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-val Green80 = Color(0xFF006c34)
-val Green40 = Color(0xFF004d21)
+val DarkGreenPrimary = Color(0xFF047900)
+val DarkGreenSecondary = Color(0xFF2E7D32)
+val DarkGreenTertiary = Color(0xFF1B5E20)
 
-val GreenGrey80 = Color(0xFF536851)
-val GreenGrey40 = Color(0xFF2b3a28)
+val LightGreenPrimary = Color(0xFF4CAF50)
+val LightGreenSecondary = Color(0xFF81C784)
+val LightGreenTertiary = Color(0xFFC8E6C9)
 
-val LightGreen80 = Color(0xFF80ed99)
-val LightGreen40 = Color(0xFF388e4d)
+val DarkGreenGrey80 = Color(0xFF2E332E)
+val DarkGreenGrey40 = Color(0xFF5E635E)
