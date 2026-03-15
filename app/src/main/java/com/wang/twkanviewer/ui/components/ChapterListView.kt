@@ -58,33 +58,36 @@ fun ChapterListView(
     
     val coroutineScope = rememberCoroutineScope()
     
-    val processedList by remember(chapters, bookmarkedChapterId, showTranslate, translatedChapters, searchQuery, isDescending) {
+    // Memoize the translation map to avoid O(N*M) lookups during recomposition
+    val translationMap by remember(translatedChapters, showTranslate) {
         derivedStateOf {
-            val translationMap = if (showTranslate) {
+            if (showTranslate) {
                 translatedChapters.associateBy { it.chapterId }
             } else emptyMap()
-            
-            // 1. Map to pairs with translation
+        }
+    }
+
+    val processedList by remember(chapters, translationMap, searchQuery, isDescending) {
+        derivedStateOf {
+            // 1. Map to pairs with translation (using pre-built map)
             val mapped = chapters.map { chapter ->
                 chapter to translationMap[chapter.id]?.title
             }
 
             // 2. Filter by search
-            val filtered = mapped.filter { (chapter, translated) ->
-                searchQuery.isEmpty() || 
-                chapter.title.contains(searchQuery, ignoreCase = true) ||
-                (translated?.contains(searchQuery, ignoreCase = true) == true)
+            val filtered = if (searchQuery.isEmpty()) mapped else {
+                mapped.filter { (chapter, translated) ->
+                    chapter.title.contains(searchQuery, ignoreCase = true) ||
+                    (translated?.contains(searchQuery, ignoreCase = true) == true)
+                }
             }
 
             // 3. Sort
-            val sorted = if (isDescending) {
+            if (isDescending) {
                 filtered.sortedByDescending { it.first.order }
             } else {
                 filtered.sortedBy { it.first.order }
             }
-
-            // Return sorted list without pinning bookmark to top
-            sorted
         }
     }
 
@@ -97,7 +100,10 @@ fun ChapterListView(
                 .weight(1f)
                 .fillMaxWidth()
         ) {
-            items(processedList) { (chapter, translatedTitle) ->
+            items(
+                items = processedList,
+                key = { it.first.id } // Adding key for better list performance
+            ) { (chapter, translatedTitle) ->
                 val isBookmarked = chapter.id == bookmarkedChapterId
                 
                 Column(

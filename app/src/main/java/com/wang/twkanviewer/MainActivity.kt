@@ -142,6 +142,7 @@ class MainActivity : ComponentActivity() {
                     var translatedStory by remember { mutableStateOf<StoryLocale?>(null) }
                     val translatedChapters = remember { mutableStateListOf<ChapterLocale>() }
                     val allTranslatedStories = remember { mutableStateListOf<StoryLocale>() }
+                    var lastTranslatedStoryId by remember { mutableStateOf<Int?>(null) }
                     
                     // Tracking state to avoid duplicate concurrent translations
                     val translatingIds = remember { mutableStateListOf<Int>() }
@@ -312,21 +313,19 @@ class MainActivity : ComponentActivity() {
                                         if (currentChapters.isNotEmpty() && currentChapters.first().storyId == storyId) {
                                             if (elements.size > currentChapters.size) {
                                                 // Append new chapters
-                                                val newChapters = mutableListOf<Chapter>()
-                                                elements.drop(currentChapters.size).forEachIndexed { index, cLink ->
-                                                    val tokens = regexTxt.find(cLink.attr("href")) ?: return@forEachIndexed
-                                                    newChapters.add(
-                                                        Chapter(
-                                                            id = tokens.groupValues[2].toInt(),
-                                                            storyId = storyId,
-                                                            order = currentChapters.size + index,
-                                                            title = cLink.text().trim(),
-                                                            url = cLink.attr("href"),
-                                                            uploadedAt = null,
-                                                            content = emptyList()
-                                                        )
+                                                val newChapters = elements.drop(currentChapters.size).mapIndexedNotNull { index, cLink ->
+                                                    val tokens = regexTxt.find(cLink.attr("href")) ?: return@mapIndexedNotNull null
+                                                    Chapter(
+                                                        id = tokens.groupValues[2].toInt(),
+                                                        storyId = storyId,
+                                                        order = currentChapters.size + index,
+                                                        title = cLink.text().trim(),
+                                                        url = cLink.attr("href"),
+                                                        uploadedAt = null,
+                                                        content = emptyList()
                                                     )
                                                 }
+                                                
                                                 if (newChapters.isNotEmpty()) {
                                                     currentChapters.addAll(newChapters)
                                                     if (storyDao.getById(storyId) != null) {
@@ -338,27 +337,28 @@ class MainActivity : ComponentActivity() {
                                         }
 
                                         // Otherwise full rebuild or first load
-                                        currentChapters.clear()
-                                        var i = 0
-                                        elements.forEach { cLink ->
-                                            val tokens = regexTxt.find(cLink.attr("href")) ?: return@forEach
-                                            currentChapters.add(
-                                                Chapter(
-                                                    id = tokens.groupValues[2].toInt(),
-                                                    storyId = storyId,
-                                                    order = i,
-                                                    title = cLink.text().trim(),
-                                                    url = cLink.attr("href"),
-                                                    uploadedAt = null,
-                                                    content = emptyList()
-                                                )
+                                        val allChapters = elements.mapIndexedNotNull { index, cLink ->
+                                            val tokens = regexTxt.find(cLink.attr("href")) ?: return@mapIndexedNotNull null
+                                            Chapter(
+                                                id = tokens.groupValues[2].toInt(),
+                                                storyId = storyId,
+                                                order = index,
+                                                title = cLink.text().trim(),
+                                                url = cLink.attr("href"),
+                                                uploadedAt = null,
+                                                content = emptyList()
                                             )
-                                            i++
+                                        }
+                                        
+                                        // Avoid UI flicker: only update if data changed
+                                        if (allChapters.size != currentChapters.size || (allChapters.isNotEmpty() && currentChapters.isNotEmpty() && allChapters.first().id != currentChapters.first().id)) {
+                                            currentChapters.clear()
+                                            currentChapters.addAll(allChapters)
                                         }
                                         
                                         // Persist if story is in library
                                         if (storyDao.getById(storyId) != null) {
-                                            chapterDao.insertAll(currentChapters.toList())
+                                            chapterDao.insertAll(allChapters)
                                         }
                                         return@launch
                                     }
@@ -557,6 +557,36 @@ class MainActivity : ComponentActivity() {
                     LaunchedEffect(currentStory) {
                         isCurrentStorySaved = currentStory?.let { storyDao.getById(it.id) != null } ?: false
                     }
+                    
+                    // Pre-load data from DB when story or language changes
+                    LaunchedEffect(currentStory?.id, targetLanguage) {
+                        val storyId = currentStory?.id ?: return@LaunchedEffect
+                        
+                        // Load chapters from DB immediately
+                        val savedChapters = chapterDao.getChaptersForStory(storyId)
+                        if (savedChapters.isNotEmpty()) {
+                            if (currentChapters.isEmpty() || currentChapters.first().storyId != storyId) {
+                                currentChapters.clear()
+                                currentChapters.addAll(savedChapters)
+                            }
+                        }
+
+                        // Load existing story locale
+                        val existingStoryLocale = storyDao.getLocaleByStoryId(storyId, targetLanguage)
+                        if (existingStoryLocale != null) {
+                            translatedStory = existingStoryLocale
+                        }
+                        
+                        // Load existing chapter locales
+                        val existingLocales = chapterDao.getLocalesForStory(storyId, targetLanguage)
+                        if (existingLocales.isNotEmpty()) {
+                            lastTranslatedStoryId = storyId
+                            translatedChapters.clear()
+                            translatedChapters.addAll(existingLocales)
+                        } else if (lastTranslatedStoryId != storyId) {
+                            translatedChapters.clear()
+                        }
+                    }
 
                     // Dialog state
                     var showExitPrompt by remember { mutableStateOf(false) }
@@ -742,20 +772,14 @@ class MainActivity : ComponentActivity() {
 
                                                 listTranslationJob?.cancel()
                                                 listTranslationJob = scope.launch {
-                                                    // 1. Sync DB
-                                                    val existingLocales = chapterDao.getLocalesForStory(storyId, targetLanguage)
-                                                    val existingIdsInState = translatedChapters.map { it.chapterId }.toSet()
-                                                    val toAdd = existingLocales.filter { it.chapterId !in existingIdsInState }
-                                                    if (toAdd.isNotEmpty()) translatedChapters.addAll(toAdd)
-                                                    
-                                                    // Ensure memory matches current story
-                                                    if (translatedChapters.isNotEmpty()) {
-                                                        val firstTranslated = translatedChapters.first()
-                                                        val matchesCurrent = currentChapters.any { it.id == firstTranslated.chapterId }
-                                                        if (!matchesCurrent) {
-                                                            translatedChapters.clear()
-                                                            translatingIds.clear()
-                                                        }
+                                                    // Only clear if the story actually changed
+                                                    if (lastTranslatedStoryId != storyId) {
+                                                        translatedChapters.clear()
+                                                        translatingIds.clear()
+                                                        
+                                                        val existingLocales = chapterDao.getLocalesForStory(storyId, targetLanguage)
+                                                        translatedChapters.addAll(existingLocales)
+                                                        lastTranslatedStoryId = storyId
                                                     }
 
                                                     isListTranslating = true
