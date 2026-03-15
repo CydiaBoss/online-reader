@@ -22,8 +22,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
@@ -40,9 +38,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.wang.twkanviewer.R
 import com.wang.twkanviewer.models.Chapter
 import com.wang.twkanviewer.models.ChapterLocale
 import kotlinx.coroutines.delay
@@ -143,7 +144,7 @@ fun ChapterView(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(onClick = onBackClick) {
-                        Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Chapter List")
+                        Icon(Icons.AutoMirrored.Filled.List, contentDescription = stringResource(R.string.chapter_list_content_description))
                     }
                     
                     IconButton(
@@ -154,7 +155,7 @@ fun ChapterView(
                             }
                         }
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Previous Chapter")
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = stringResource(R.string.previous_chapter_content_description))
                     }
 
                     // Index check for bookmark logic
@@ -163,15 +164,15 @@ fun ChapterView(
                     
                     IconButton(onClick = onBookmarkClick) {
                         Icon(
-                            imageVector = if (isBookmarked) Icons.Default.Star else Icons.Outlined.Star,
-                            contentDescription = "Bookmark",
+                            painter = painterResource(id = if (isBookmarked) R.drawable.filled_bookmark_24px else R.drawable.bookmark_24px),
+                            contentDescription = stringResource(R.string.bookmark_content_description),
                             tint = if (isBookmarked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                         )
                     }
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         IconButton(onClick = { onFontSizeChange(fontSize - 1f) }) {
-                            Text("A-", style = MaterialTheme.typography.labelLarge)
+                            Text(stringResource(R.string.font_decrease), style = MaterialTheme.typography.labelLarge)
                         }
                         Text(
                             text = fontSize.toInt().toString(),
@@ -179,7 +180,7 @@ fun ChapterView(
                             modifier = Modifier.padding(horizontal = 4.dp)
                         )
                         IconButton(onClick = { onFontSizeChange(fontSize + 1f) }) {
-                            Text("A+", style = MaterialTheme.typography.labelLarge)
+                            Text(stringResource(R.string.font_increase), style = MaterialTheme.typography.labelLarge)
                         }
                     }
 
@@ -191,7 +192,7 @@ fun ChapterView(
                             }
                         }
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Next Chapter")
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = stringResource(R.string.next_chapter_content_description))
                     }
                 }
             }

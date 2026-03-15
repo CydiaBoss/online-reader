@@ -29,6 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -62,8 +63,8 @@ fun StoryView(
     if (showDeleteDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
-            title = { Text("Delete Story") },
-            text = { Text("Are you sure you want to delete '${story.title}' and all its saved chapters from your library?") },
+            title = { Text(stringResource(R.string.delete_story_title)) },
+            text = { Text(stringResource(R.string.delete_story_confirmation, story.title)) },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -71,12 +72,12 @@ fun StoryView(
                         showDeleteDialog = false
                     }
                 ) {
-                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.delete_button), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteDialog = false }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.cancel_button))
                 }
             }
         )
@@ -110,17 +111,17 @@ fun StoryView(
                     .height(200.dp)
             )
             Spacer(modifier = Modifier.height(10.dp))
-            Text(text = if (story.completed) "Completed" else "Ongoing")
+            Text(text = if (story.completed) stringResource(R.string.status_completed) else stringResource(R.string.status_ongoing))
             Spacer(modifier = Modifier.height(10.dp))
-            Text(text = "Word Count: " + story.wordCount)
+            Text(text = stringResource(R.string.word_count_format, story.wordCount))
             Spacer(modifier = Modifier.height(10.dp))
-            Text(text = "Last Updated: " + dateFormatter.format(story.lastUpdated))
+            Text(text = stringResource(R.string.last_updated_format, dateFormatter.format(story.lastUpdated)))
             Spacer(modifier = Modifier.height(10.dp))
-            Text(text = "Genre: $displayGenre")
+            Text(text = stringResource(R.string.genre_format, displayGenre))
             Spacer(modifier = Modifier.height(10.dp))
             Text(text = displayDescription)
             Spacer(modifier = Modifier.height(10.dp))
-            Text(text = "Tags: $displayTags")
+            Text(text = stringResource(R.string.tags_format, displayTags))
             Spacer(modifier = Modifier.height(10.dp))
         }
         BottomAppBar(
@@ -131,7 +132,7 @@ fun StoryView(
                 IconButton(onClick = { showDeleteDialog = true }) {
                     Icon(
                         imageVector = Icons.Default.Delete,
-                        contentDescription = "delete",
+                        contentDescription = stringResource(R.string.delete_content_description),
                         tint = MaterialTheme.colorScheme.error
                     )
                 }
@@ -139,7 +140,7 @@ fun StoryView(
                 IconButton(onClick = onSave) {
                     Icon(
                         painter = painterResource(id = R.drawable.add_24px),
-                        contentDescription = "save"
+                        contentDescription = stringResource(R.string.save_content_description)
                     )
                 }
             }
@@ -147,7 +148,7 @@ fun StoryView(
             IconButton(onClick = onChapterClick) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.List,
-                    contentDescription = "Chapters"
+                    contentDescription = stringResource(R.string.chapters_content_description)
                 )
             }
         }

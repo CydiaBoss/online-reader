@@ -24,7 +24,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.wang.twkanviewer.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -43,7 +45,7 @@ fun SettingsView(
         bottomBar = {
             BottomAppBar {
                 IconButton(onClick = onBackClick, modifier = Modifier.padding(horizontal = 8.dp)) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back_content_description))
                 }
             }
         },
@@ -59,13 +61,13 @@ fun SettingsView(
         ) {
             // "Settings" title at the top of the content area with minimal top padding
             Text(
-                "Settings",
+                stringResource(R.string.settings_title),
                 style = MaterialTheme.typography.headlineLarge,
                 modifier = Modifier.padding(top = 8.dp, bottom = 24.dp)
             )
 
             // Translator Settings
-            Text("Translation", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.translation_section), style = MaterialTheme.typography.titleMedium)
             
             Row(
                 modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
@@ -73,9 +75,9 @@ fun SettingsView(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Use External Translator", style = MaterialTheme.typography.bodyLarge)
+                    Text(stringResource(R.string.use_external_translator_label), style = MaterialTheme.typography.bodyLarge)
                     Text(
-                        "Uses Google Translate API (requires API Key)",
+                        stringResource(R.string.use_external_translator_description),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -90,7 +92,7 @@ fun SettingsView(
                 OutlinedTextField(
                     value = translatorApiKey,
                     onValueChange = onTranslatorApiKeyChange,
-                    label = { Text("Translator API Key") },
+                    label = { Text(stringResource(R.string.translator_api_key_label)) },
                     modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
                     singleLine = true
                 )
@@ -99,23 +101,23 @@ fun SettingsView(
             HorizontalDivider(modifier = Modifier.padding(vertical = 24.dp))
 
             // Browser Settings
-            Text("Browser", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.browser_section), style = MaterialTheme.typography.titleMedium)
             
             OutlinedTextField(
                 value = userAgent,
                 onValueChange = onUserAgentChange,
-                label = { Text("User Agent String") },
+                label = { Text(stringResource(R.string.user_agent_label)) },
                 modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
-                placeholder = { Text("Mozilla/5.0 ...") }
+                placeholder = { Text(stringResource(R.string.user_agent_placeholder)) }
             )
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 24.dp))
 
             // Reader Settings
-            Text("Reader", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.reader_section), style = MaterialTheme.typography.titleMedium)
             
             Column(modifier = Modifier.padding(top = 16.dp)) {
-                Text("Chapter Font Size: ${chapterFontSize.toInt()}sp", style = MaterialTheme.typography.bodyLarge)
+                Text(stringResource(R.string.chapter_font_size_label, chapterFontSize.toInt()), style = MaterialTheme.typography.bodyLarge)
                 Slider(
                     value = chapterFontSize,
                     onValueChange = onChapterFontSizeChange,

@@ -970,15 +970,15 @@ class MainActivity : ComponentActivity() {
                     if (showExitPrompt) {
                         AlertDialog(
                             onDismissRequest = { showExitPrompt = false },
-                            title = { Text("Unsaved Changes") },
-                            text = { Text("This story is not in your library. Would you like to save it and its translations before leaving?") },
+                            title = { Text(stringResource(R.string.unsaved_changes_title)) },
+                            text = { Text(stringResource(R.string.unsaved_changes_message)) },
                             confirmButton = {
                                 Button(onClick = {
                                     onSave()
                                     showExitPrompt = false
                                     nextViewStateAfterPrompt?.let { navigateTo(it) }
                                 }) {
-                                    Text("Save and Exit")
+                                    Text(stringResource(R.string.save_and_exit_button))
                                 }
                             },
                             dismissButton = {
@@ -986,7 +986,7 @@ class MainActivity : ComponentActivity() {
                                     showExitPrompt = false
                                     nextViewStateAfterPrompt?.let { navigateTo(it) }
                                 }) {
-                                    Text("Discard and Exit")
+                                    Text(stringResource(R.string.discard_and_exit_button))
                                 }
                             }
                         )

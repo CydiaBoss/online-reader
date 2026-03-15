@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">TWKANViewer</string>
+    <string name="app_name" translatable="false">TWKANViewer</string>
     <string name="url_label">URL:</string>
     <string name="loading">Loading…</string>
     <string name="saved_chapters_title">Saved Chapters</string>
@@ -12,7 +12,60 @@
     <string name="scrapper_content_description">Scrapper</string>
     <string name="translator_content_description">Translator</string>
     <string name="settings_content_description">Settings</string>
-    <string name="default_url">https://twkan.com</string>
-    <string name="translation_api_base_url">https://translate-pa.googleapis.com/</string>
-    <string name="default_user_agent">Mozilla/5.0 (Linux; Android 10; SM-G975F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.198 Mobile Safari/537.36</string>
+    <string name="default_url" translatable="false">https://twkan.com</string>
+    <string name="translation_api_base_url" translatable="false">https://translate-pa.googleapis.com/</string>
+    <string name="default_user_agent" translatable="false">Mozilla/5.0 (Linux; Android 10; SM-G975F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.198 Mobile Safari/537.36</string>
+
+    <!-- Common -->
+    <string name="back_content_description">Back</string>
+    <string name="delete_button">Delete</string>
+    <string name="cancel_button">Cancel</string>
+
+    <!-- Story List View -->
+    <string name="delete_story_title">Delete Story</string>
+    <string name="delete_story_confirmation">Are you sure you want to delete \'%1$s\' and all its saved chapters from your library?</string>
+    <string name="search_stories_placeholder">Search stories…</string>
+
+    <!-- Story View -->
+    <string name="status_completed">Completed</string>
+    <string name="status_ongoing">Ongoing</string>
+    <string name="word_count_format">Word Count: %1$d</string>
+    <string name="last_updated_format">Last Updated: %1$s</string>
+    <string name="genre_format">Genre: %1$s</string>
+    <string name="tags_format">Tags: %1$s</string>
+    <string name="delete_content_description">delete</string>
+    <string name="save_content_description">save</string>
+    <string name="chapters_content_description">Chapters</string>
+
+    <!-- Chapter List View -->
+    <string name="bookmarked_content_description">Bookmarked</string>
+    <string name="search_chapters_placeholder">Search chapters…</string>
+    <string name="jump_to_bookmark_content_description">Jump to Bookmark</string>
+    <string name="toggle_order_content_description">Toggle Order</string>
+
+    <!-- Chapter View -->
+    <string name="chapter_list_content_description">Chapter List</string>
+    <string name="previous_chapter_content_description">Previous Chapter</string>
+    <string name="next_chapter_content_description">Next Chapter</string>
+    <string name="bookmark_content_description">Bookmark</string>
+    <string name="font_decrease" translatable="false">A-</string>
+    <string name="font_increase" translatable="false">A+</string>
+
+    <!-- Settings View -->
+    <string name="settings_title">Settings</string>
+    <string name="translation_section">Translation</string>
+    <string name="use_external_translator_label">Use External Translator</string>
+    <string name="use_external_translator_description">Uses Google Translate API (requires API Key)</string>
+    <string name="translator_api_key_label">Translator API Key</string>
+    <string name="browser_section">Browser</string>
+    <string name="user_agent_label">User Agent String</string>
+    <string name="user_agent_placeholder" translatable="false">Mozilla/5.0 ...</string>
+    <string name="reader_section">Reader</string>
+    <string name="chapter_font_size_label">Chapter Font Size: %1$dsp</string>
+
+    <!-- Main Activity Dialogs -->
+    <string name="unsaved_changes_title">Unsaved Changes</string>
+    <string name="unsaved_changes_message">This story is not in your library. Would you like to save it and its translations before leaving?</string>
+    <string name="save_and_exit_button">Save and Exit</string>
+    <string name="discard_and_exit_button">Discard and Exit</string>
 </resources>

@@ -26,7 +26,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -37,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.wang.twkanviewer.R
 import com.wang.twkanviewer.models.Chapter
@@ -111,7 +111,7 @@ fun ChapterListView(
                                 if (isBookmarked) {
                                     Icon(
                                         imageVector = Icons.Default.Star,
-                                        contentDescription = "Bookmarked",
+                                        contentDescription = stringResource(R.string.bookmarked_content_description),
                                         tint = MaterialTheme.colorScheme.primary,
                                         modifier = Modifier.size(18.dp).padding(end = 8.dp)
                                     )
@@ -138,7 +138,7 @@ fun ChapterListView(
 
         BottomAppBar {
             IconButton(onClick = onBackToStoryClick) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back_content_description))
             }
             TextField(
                 value = searchQuery,
@@ -146,7 +146,7 @@ fun ChapterListView(
                 modifier = Modifier
                     .weight(1f)
                     .padding(horizontal = 8.dp),
-                placeholder = { Text("Search chapters...") },
+                placeholder = { Text(stringResource(R.string.search_chapters_placeholder)) },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = Color.Transparent,
@@ -168,8 +168,8 @@ fun ChapterListView(
                     }
                 }) {
                     Icon(
-                        imageVector = Icons.Default.Star,
-                        contentDescription = "Jump to Bookmark",
+                        painter = painterResource(id = R.drawable.filled_bookmark_24px),
+                        contentDescription = stringResource(R.string.jump_to_bookmark_content_description),
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
@@ -178,7 +178,7 @@ fun ChapterListView(
             IconButton(onClick = { isDescending = !isDescending }) {
                 Icon(
                     painter = painterResource(id = R.drawable.sort_24px),
-                    contentDescription = "Toggle Order",
+                    contentDescription = stringResource(R.string.toggle_order_content_description),
                     tint = if (isDescending) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                 )
             }

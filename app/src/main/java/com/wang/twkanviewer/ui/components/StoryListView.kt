@@ -34,9 +34,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.wang.twkanviewer.R
 import com.wang.twkanviewer.models.Story
 import com.wang.twkanviewer.models.StoryLocale
 
@@ -74,8 +76,8 @@ fun StoryListView(
     if (storyToDelete != null) {
         AlertDialog(
             onDismissRequest = { storyToDelete = null },
-            title = { Text("Delete Story") },
-            text = { Text("Are you sure you want to delete '${storyToDelete!!.title}' and all its saved chapters from your library?") },
+            title = { Text(stringResource(R.string.delete_story_title)) },
+            text = { Text(stringResource(R.string.delete_story_confirmation, storyToDelete!!.title)) },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -83,12 +85,12 @@ fun StoryListView(
                         storyToDelete = null
                     }
                 ) {
-                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.delete_button), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { storyToDelete = null }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.cancel_button))
                 }
             }
         )
@@ -145,7 +147,7 @@ fun StoryListView(
                         IconButton(onClick = { storyToDelete = story }) {
                             Icon(
                                 Icons.Default.Delete,
-                                contentDescription = "Delete",
+                                contentDescription = stringResource(R.string.delete_button),
                                 tint = MaterialTheme.colorScheme.error
                             )
                         }
@@ -161,7 +163,7 @@ fun StoryListView(
 
         BottomAppBar {
             IconButton(onClick = onBackClick) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back_content_description))
             }
             TextField(
                 value = searchQuery,
@@ -169,7 +171,7 @@ fun StoryListView(
                 modifier = Modifier
                     .weight(1f)
                     .padding(horizontal = 8.dp),
-                placeholder = { Text("Search stories...") },
+                placeholder = { Text(stringResource(R.string.search_stories_placeholder)) },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = Color.Transparent,
