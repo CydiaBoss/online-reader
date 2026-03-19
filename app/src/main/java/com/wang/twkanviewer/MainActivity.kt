@@ -335,7 +335,7 @@ class MainActivity : ComponentActivity() {
                                                 if (newChapters.isNotEmpty()) {
                                                     currentChapters.addAll(newChapters)
                                                     if (storyDao.getById(storyId) != null) {
-                                                        chapterDao.upsertAll(newChapters)
+                                                        chapterDao.safeUpsertAll(newChapters)
                                                     }
                                                 }
                                             }
@@ -357,7 +357,7 @@ class MainActivity : ComponentActivity() {
                                         }
                                         
                                         // Avoid UI flicker: only update if data changed or story changed
-                                        val isDataChanged = allChapters.size != currentChapters.size || (allChapters.isNotEmpty() && allChapters.first().id != currentChapters.first().id)
+                                        val isDataChanged = allChapters.size != currentChapters.size || (allChapters.isNotEmpty() && currentChapters.isNotEmpty() && allChapters.first().id != currentChapters.first().id)
                                         val isDifferentStory = currentChapters.isNotEmpty() && currentChapters.first().storyId != storyId
 
                                         if (isDifferentStory || isDataChanged) {
@@ -367,7 +367,7 @@ class MainActivity : ComponentActivity() {
                                         
                                         // Persist if story is in library
                                         if (storyDao.getById(storyId) != null) {
-                                            chapterDao.upsertAll(allChapters)
+                                            chapterDao.safeUpsertAll(allChapters)
                                         }
                                         return@launch
                                     }
@@ -402,7 +402,7 @@ class MainActivity : ComponentActivity() {
                                                 // Persist if story is in library
                                                 currentStory?.let { story ->
                                                     if (storyDao.getById(story.id) != null) {
-                                                        chapterDao.upsertAll(listOf(updatedChapter))
+                                                        chapterDao.upsert(updatedChapter)
                                                     }
                                                 }
                                             }
@@ -621,8 +621,8 @@ class MainActivity : ComponentActivity() {
                                 currentChapters.forEach { chapter ->
                                     chapter.storyId = story.id
                                 }
-                                chapterDao.upsertAll(currentChapters)
-                                chapterDao.upsertAllLocale(translatedChapters.filter { currentChapters.find { c -> c.id == it.chapterId } != null })
+                                chapterDao.safeUpsertAll(currentChapters)
+                                chapterDao.safeUpsertAllLocales(translatedChapters.filter { currentChapters.find { c -> c.id == it.chapterId } != null })
                             }
                         }
                     }
@@ -770,13 +770,12 @@ class MainActivity : ComponentActivity() {
                                                 }
                                             }
                                             ViewState.CHAPTER_LIST -> {
-                                                val storyId = currentStory?.id ?: return@launch
                                                 if (isListTranslating) return@launch
 
                                                 listTranslationJob?.cancel()
                                                 listTranslationJob = scope.launch {
                                                     // Note: We no longer clear here because the LaunchedEffect handles the reset on story transition.
-
+                                                    
                                                     isListTranslating = true
                                                     try {
                                                         val translatedIds = translatedChapters.map { it.chapterId }.toSet()
@@ -812,15 +811,7 @@ class MainActivity : ComponentActivity() {
                                                             // Only persist if job is still active
                                                             if (coroutineContext.isActive) {
                                                                 scope.launch {
-                                                                    newLocales.forEach { locale ->
-                                                                        try {
-                                                                            if (chapterDao.getById(locale.chapterId) != null) {
-                                                                                chapterDao.upsertLocale(locale)
-                                                                            }
-                                                                        } catch (e: android.database.sqlite.SQLiteConstraintException) {
-                                                                            Log.w("Translate", "Skipping locale insert, parent chapter gone: ${locale.chapterId}", e)
-                                                                        }
-                                                                    }
+                                                                    chapterDao.safeUpsertAllLocales(newLocales)
                                                                 }
                                                             }
 
