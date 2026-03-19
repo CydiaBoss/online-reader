@@ -357,7 +357,7 @@ class MainActivity : ComponentActivity() {
                                         }
                                         
                                         // Avoid UI flicker: only update if data changed or story changed
-                                        val isDataChanged = allChapters.size != currentChapters.size || (allChapters.isNotEmpty() && currentChapters.isNotEmpty() && allChapters.first().id != currentChapters.first().id)
+                                        val isDataChanged = allChapters.size != currentChapters.size || (allChapters.isNotEmpty() && allChapters.first().id != currentChapters.first().id)
                                         val isDifferentStory = currentChapters.isNotEmpty() && currentChapters.first().storyId != storyId
 
                                         if (isDifferentStory || isDataChanged) {
