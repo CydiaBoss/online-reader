@@ -1,6 +1,8 @@
 package com.wang.twkanviewer.ui.components
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -11,6 +13,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.BottomAppBar
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -22,6 +26,10 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -39,8 +47,13 @@ fun SettingsView(
     onUserAgentChange: (String) -> Unit,
     chapterFontSize: Float,
     onChapterFontSizeChange: (Float) -> Unit,
+    chapterFontFamily: String,
+    onChapterFontFamilyChange: (String) -> Unit,
     onBackClick: () -> Unit
 ) {
+    var fontDropdownExpanded by remember { mutableStateOf(false) }
+    val fontOptions = listOf("Default", "Serif", "Sans Serif", "Monospace")
+
     Scaffold(
         bottomBar = {
             BottomAppBar {
@@ -124,6 +137,50 @@ fun SettingsView(
                     valueRange = 12f..32f,
                     steps = 20
                 )
+            }
+
+            Box(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
+                Column {
+                    Text(stringResource(R.string.chapter_font_family_label), style = MaterialTheme.typography.bodyLarge)
+                    OutlinedTextField(
+                        value = chapterFontFamily,
+                        onValueChange = { },
+                        readOnly = true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp)
+                            .clickable { fontDropdownExpanded = true },
+                        enabled = false, // Disable to handle clicks via Box or Modifier.clickable
+                        colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                            disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                            disabledBorderColor = MaterialTheme.colorScheme.outline,
+                            disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            disabledPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    )
+                }
+                // Overlay for clicking since OutlinedTextField is disabled
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .clickable { fontDropdownExpanded = true }
+                )
+                
+                DropdownMenu(
+                    expanded = fontDropdownExpanded,
+                    onDismissRequest = { fontDropdownExpanded = false },
+                    modifier = Modifier.fillMaxWidth(0.9f)
+                ) {
+                    fontOptions.forEach { option ->
+                        DropdownMenuItem(
+                            text = { Text(option) },
+                            onClick = {
+                                onChapterFontFamilyChange(option)
+                                fontDropdownExpanded = false
+                            }
+                        )
+                    }
+                }
             }
         }
     }

@@ -40,6 +40,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -58,6 +59,7 @@ fun ChapterView(
     translatedChapters: List<ChapterLocale> = emptyList(),
     fontSize: Float,
     onFontSizeChange: (Float) -> Unit,
+    fontFamily: String,
     onBookmarkClick: () -> Unit,
     onNavigateToChapter: (Chapter) -> Unit,
     onBackClick: () -> Unit,
@@ -124,6 +126,7 @@ fun ChapterView(
                         translatedChapter = translatedChapter,
                         showTranslate = showTranslate,
                         fontSize = fontSize,
+                        fontFamily = fontFamily,
                         onToggleAppBar = { showAppBar = !showAppBar },
                         onScrollInProgress = { if (it) showAppBar = false }
                     )
@@ -206,6 +209,7 @@ private fun ChapterPageContent(
     translatedChapter: ChapterLocale?,
     showTranslate: Boolean,
     fontSize: Float,
+    fontFamily: String,
     onToggleAppBar: () -> Unit,
     onScrollInProgress: (Boolean) -> Unit
 ) {
@@ -223,6 +227,13 @@ private fun ChapterPageContent(
         translatedChapter.content
     else 
         chapter.content
+
+    val composeFontFamily = when (fontFamily) {
+        "Serif" -> FontFamily.Serif
+        "Sans Serif" -> FontFamily.SansSerif
+        "Monospace" -> FontFamily.Monospace
+        else -> FontFamily.Default
+    }
 
     Box(
         modifier = Modifier
@@ -249,7 +260,7 @@ private fun ChapterPageContent(
 
             Text(
                 text = displayTitle,
-                style = MaterialTheme.typography.headlineMedium,
+                style = MaterialTheme.typography.headlineMedium.copy(fontFamily = composeFontFamily),
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -257,7 +268,7 @@ private fun ChapterPageContent(
             chapter.uploadedAt?.let {
                 Text(
                     text = it.toString(),
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodySmall.copy(fontFamily = composeFontFamily),
                     color = MaterialTheme.colorScheme.outline,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
@@ -274,6 +285,7 @@ private fun ChapterPageContent(
                         text = paragraph.trim(),
                         fontSize = fontSize.sp,
                         lineHeight = (fontSize * 1.5).sp,
+                        fontFamily = composeFontFamily,
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(bottom = 12.dp)

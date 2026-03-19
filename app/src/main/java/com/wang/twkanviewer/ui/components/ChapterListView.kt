@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import com.wang.twkanviewer.R
 import com.wang.twkanviewer.models.Chapter
 import com.wang.twkanviewer.models.ChapterLocale
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
@@ -103,8 +104,12 @@ fun ChapterListView(
         }
     }
 
+    // Debounce the visibility updates to avoid excessive recompositions of parent (MainActivity)
     LaunchedEffect(visibleChapterIds) {
-        onVisibleIdsChange(visibleChapterIds)
+        if (visibleChapterIds.isNotEmpty()) {
+            delay(500)
+            onVisibleIdsChange(visibleChapterIds)
+        }
     }
 
     Column(

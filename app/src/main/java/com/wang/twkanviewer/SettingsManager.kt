@@ -18,6 +18,7 @@ class SettingsManager(private val context: Context) {
     companion object {
         val SHOW_TRANSLATE = booleanPreferencesKey("show_translate")
         val CHAPTER_FONT_SIZE = floatPreferencesKey("chapter_font_size")
+        val CHAPTER_FONT_FAMILY = stringPreferencesKey("chapter_font_family")
         val USE_EXTERNAL_TRANSLATOR = booleanPreferencesKey("use_external_translator")
         val TRANSLATOR_API_KEY = stringPreferencesKey("translator_api_key")
         val USER_AGENT = stringPreferencesKey("user_agent")
@@ -31,6 +32,11 @@ class SettingsManager(private val context: Context) {
     val chapterFontSize: Flow<Float> = context.dataStore.data
         .map { preferences ->
             preferences[CHAPTER_FONT_SIZE] ?: 16f
+        }
+
+    val chapterFontFamily: Flow<String> = context.dataStore.data
+        .map { preferences ->
+            preferences[CHAPTER_FONT_FAMILY] ?: "Default"
         }
 
     val useExternalTranslator: Flow<Boolean> = context.dataStore.data
@@ -57,6 +63,12 @@ class SettingsManager(private val context: Context) {
     suspend fun setChapterFontSize(size: Float) {
         context.dataStore.edit { preferences ->
             preferences[CHAPTER_FONT_SIZE] = size
+        }
+    }
+
+    suspend fun setChapterFontFamily(fontFamily: String) {
+        context.dataStore.edit { preferences ->
+            preferences[CHAPTER_FONT_FAMILY] = fontFamily
         }
     }
 

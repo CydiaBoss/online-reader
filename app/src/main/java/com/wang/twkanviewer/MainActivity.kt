@@ -118,6 +118,7 @@ class MainActivity : ComponentActivity() {
                     val settingsManager = remember { SettingsManager(this) }
                     val savedShowTranslate by settingsManager.showTranslate.collectAsState(initial = false)
                     val savedChapterFontSize by settingsManager.chapterFontSize.collectAsState(initial = 16f)
+                    val savedChapterFontFamily by settingsManager.chapterFontFamily.collectAsState(initial = "Default")
                     val savedUseExternalTranslator by settingsManager.useExternalTranslator.collectAsState(initial = false)
                     val savedTranslatorApiKey by settingsManager.translatorApiKey.collectAsState(initial = "")
                     val savedUserAgent by settingsManager.userAgent.collectAsState(initial = "")
@@ -157,6 +158,7 @@ class MainActivity : ComponentActivity() {
 
                     // Settings
                     var chapterFontSize by remember { mutableFloatStateOf(16f) }
+                    var chapterFontFamily by remember { mutableStateOf("Default") }
 
                     // Sync settings
                     LaunchedEffect(savedShowTranslate) {
@@ -164,6 +166,9 @@ class MainActivity : ComponentActivity() {
                     }
                     LaunchedEffect(savedChapterFontSize) {
                         chapterFontSize = savedChapterFontSize
+                    }
+                    LaunchedEffect(savedChapterFontFamily) {
+                        chapterFontFamily = savedChapterFontFamily
                     }
                     LaunchedEffect(savedUseExternalTranslator) {
                         useExternalTranslator = savedUseExternalTranslator
@@ -1136,6 +1141,7 @@ class MainActivity : ComponentActivity() {
                                                             chapterFontSize = newSize
                                                             scope.launch { settingsManager.setChapterFontSize(newSize) }
                                                         },
+                                                        fontFamily = chapterFontFamily,
                                                         onBookmarkClick = onToggleBookmark,
                                                         onNavigateToChapter = { newChapter ->
                                                             if (currentChapter?.url != newChapter.url) {
@@ -1191,6 +1197,11 @@ class MainActivity : ComponentActivity() {
                                                 onChapterFontSizeChange = { size ->
                                                     chapterFontSize = size
                                                     scope.launch { settingsManager.setChapterFontSize(size) }
+                                                },
+                                                chapterFontFamily = chapterFontFamily,
+                                                onChapterFontFamilyChange = { family ->
+                                                    chapterFontFamily = family
+                                                    scope.launch { settingsManager.setChapterFontFamily(family) }
                                                 },
                                                 onBackClick = { currentViewState = ViewState.BROWSER }
                                             )

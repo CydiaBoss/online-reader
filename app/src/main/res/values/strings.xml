@@ -62,6 +62,7 @@
     <string name="user_agent_placeholder" translatable="false">Mozilla/5.0 ...</string>
     <string name="reader_section">Reader</string>
     <string name="chapter_font_size_label">Chapter Font Size: %1$dsp</string>
+    <string name="chapter_font_family_label">Chapter Font Family</string>
 
     <!-- Main Activity Dialogs -->
     <string name="unsaved_changes_title">Unsaved Changes</string>

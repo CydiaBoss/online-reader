@@ -54,6 +54,9 @@ interface ChapterDao {
     @Transaction
     suspend fun safeUpsertAllLocales(locales: List<ChapterLocale>) {
         for (locale in locales) {
+            // Ensure the parent chapter exists before inserting the locale to avoid FOREIGN KEY constraint failure
+            if (getById(locale.chapterId) == null) continue
+
             val existing = getLocaleByChapterId(locale.chapterId, locale.language)
             if (existing == null) {
                 upsertLocale(locale)
