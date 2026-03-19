@@ -75,6 +75,7 @@ fun ChapterListView(
                 chapter to translationMap[chapter.id]?.title
             }
 
+            // Translation query
             val filtered = if (searchQuery.isEmpty()) mapped else {
                 mapped.filter { (chapter, translated) ->
                     chapter.title.contains(searchQuery, ignoreCase = true) ||

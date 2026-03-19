@@ -93,6 +93,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // API
         val retrofit = Retrofit.Builder()
             .baseUrl(getString(R.string.translation_api_base_url))
             .addConverterFactory(ScalarsConverterFactory.create())
@@ -100,19 +101,19 @@ class MainActivity : ComponentActivity() {
             .build()
         val translationService = retrofit.create(TranslationService::class.java)
 
+        // Regex
+        val regexBook = Regex("/book/(\\d+)\\.html")
+        val regexChapters = Regex("/book/(\\d+)/index\\.html")
+        val regexTxt = Regex("/txt/(\\d+)/(\\d+)")
+        val regexWordCount = Regex("((?:\\d+\\.)?\\d+)(\\p{InCJK_UNIFIED_IDEOGRAPHS})字.+")
+        val regexUpdateAt = Regex("更新：(\\d{4}-\\d{2}-\\d{2}).+")
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val dateTimeFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+
         setContent {
             // A surface container using the 'background' color from the theme
             TWKANViewerTheme {
                 Surface( modifier = Modifier.fillMaxSize()) {
-                    // Regex
-                    val regexBook = Regex("/book/(\\d+)\\.html")
-                    val regexChapters = Regex("/book/(\\d+)/index\\.html")
-                    val regexTxt = Regex("/txt/(\\d+)/(\\d+)")
-                    val regexWordCount = Regex("((?:\\d+\\.)?\\d+)(\\p{InCJK_UNIFIED_IDEOGRAPHS})字.+")
-                    val regexUpdateAt = Regex("更新：(\\d{4}-\\d{2}-\\d{2}).+")
-                    val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-                    val dateTimeFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
-
                     // Settings
                     val settingsManager = remember { SettingsManager(this) }
                     val savedShowTranslate by settingsManager.showTranslate.collectAsState(initial = false)
@@ -152,7 +153,6 @@ class MainActivity : ComponentActivity() {
                     var isModelDownloading by remember { mutableStateOf(false) }
                     var listTranslationJob by remember { mutableStateOf<Job?>(null) }
                     var libraryTranslationJob by remember { mutableStateOf<Job?>(null) }
-
                     val isAnyTranslationActive = isStoryTranslating || isListTranslating || isLibraryTranslating || translatingIds.isNotEmpty() || isModelDownloading
 
                     // Settings
@@ -232,22 +232,23 @@ class MainActivity : ComponentActivity() {
 
                                         val title =
                                             doc.selectFirst("div.booknav2 h1 a")?.text()
-                                                ?: ""
+                                                ?: existingStory?.title ?: ""
                                         val imgUrl =
                                             doc.selectFirst("div.bookimg2 img")?.attr("src")
-                                                ?: ""
+                                                ?: existingStory?.imgUrl ?: ""
                                         val genre =
                                             doc.selectFirst("div.booknav2 a[href*=/novels/class/]")
-                                                ?.text() ?: ""
+                                                ?.text() ?: existingStory?.genre ?: ""
                                         val author =
                                             doc.selectFirst("div.booknav2 a[href*=/author/]")
-                                                ?.text() ?: ""
+                                                ?.text() ?: existingStory?.author ?: ""
                                         val description =
-                                            doc.selectFirst("div.navtxt > p")?.text() ?: ""
+                                            doc.selectFirst("div.navtxt > p")?.text() ?: existingStory?.description ?: ""
                                         val completed =
                                             doc.selectFirst("span.status1") != null
-                                        var wordCount = 0.0F
-                                        var lastUpdated = Date()
+                                        var wordCount = existingStory?.wordCount?.toFloat() ?: 0.0F
+                                        var lastUpdated = existingStory?.lastUpdated ?: Date()
+                                        // Parse book info data
                                         doc.select("div.booknav2 > p").forEach { p ->
                                             val text = p.text()
 
@@ -255,8 +256,7 @@ class MainActivity : ComponentActivity() {
                                             val matchWordCounter =
                                                 regexWordCount.matchEntire(text)
                                             if (matchWordCounter != null) {
-                                                wordCount =
-                                                    matchWordCounter.groupValues[1].toFloat()
+                                                wordCount = matchWordCounter.groupValues[1].toFloat()
                                                 // Multiplier
                                                 when (matchWordCounter.groupValues[2]) {
                                                     "百" -> wordCount *= 100
@@ -277,8 +277,7 @@ class MainActivity : ComponentActivity() {
                                                 return@forEach
                                             }
                                         }
-                                        val tags =
-                                            doc.select("div.tagul a").map { it.text() }
+                                        val tags = doc.select("div.tagul a").map { it.text() }
 
                                         val scrapedStory = Story(
                                             id = storyId,
@@ -298,7 +297,7 @@ class MainActivity : ComponentActivity() {
                                         
                                         // Update database if story is in library
                                         if (existingStory != null) {
-                                            storyDao.insert(scrapedStory)
+                                            storyDao.upsert(scrapedStory)
                                         }
                                         return@launch
                                     }
@@ -307,20 +306,27 @@ class MainActivity : ComponentActivity() {
                                     val matchChaptersUrl = regexChapters.find(loadedUrl)
                                     if (matchChaptersUrl != null) {
                                         val storyId = matchChaptersUrl.groupValues[1].toInt()
-                                        val elements = doc.select("div#allchapter ul li a")
+                                        val elements = doc.select("div#allchapter ul li")
+                                        val mappedElements = elements.associateBy({ it.attr("data-num").toInt() }, { it.selectFirst("a")!! })
 
                                         // If it's the same story, check for new chapters
                                         if (currentChapters.isNotEmpty() && currentChapters.first().storyId == storyId) {
-                                            if (elements.size > currentChapters.size) {
+                                            if (mappedElements.size > currentChapters.size) {
+                                                // Filter out old chapters from mapped chapters
+                                                val currentChapterIds = currentChapters.map { it.order }
+                                                val filteredNewElements = mappedElements.filter {
+                                                    it.key !in currentChapterIds
+                                                }
+
                                                 // Append new chapters
-                                                val newChapters = elements.drop(currentChapters.size).mapIndexedNotNull { index, cLink ->
-                                                    val tokens = regexTxt.find(cLink.attr("href")) ?: return@mapIndexedNotNull null
+                                                val newChapters = filteredNewElements.mapNotNull { cLink ->
+                                                    val tokens = regexTxt.find(cLink.value.attr("href")) ?: return@mapNotNull null
                                                     Chapter(
                                                         id = tokens.groupValues[2].toInt(),
                                                         storyId = storyId,
-                                                        order = currentChapters.size + index,
-                                                        title = cLink.text().trim(),
-                                                        url = cLink.attr("href"),
+                                                        order = cLink.key,
+                                                        title = cLink.value.text().trim(),
+                                                        url = cLink.value.attr("href"),
                                                         uploadedAt = null,
                                                         content = emptyList()
                                                     )
@@ -329,7 +335,7 @@ class MainActivity : ComponentActivity() {
                                                 if (newChapters.isNotEmpty()) {
                                                     currentChapters.addAll(newChapters)
                                                     if (storyDao.getById(storyId) != null) {
-                                                        chapterDao.insertAll(newChapters)
+                                                        chapterDao.upsertAll(newChapters)
                                                     }
                                                 }
                                             }
@@ -337,28 +343,31 @@ class MainActivity : ComponentActivity() {
                                         }
 
                                         // Otherwise full rebuild or first load
-                                        val allChapters = elements.mapIndexedNotNull { index, cLink ->
-                                            val tokens = regexTxt.find(cLink.attr("href")) ?: return@mapIndexedNotNull null
+                                        val allChapters = mappedElements.mapNotNull { cLink ->
+                                            val tokens = regexTxt.find(cLink.value.attr("href")) ?: return@mapNotNull null
                                             Chapter(
                                                 id = tokens.groupValues[2].toInt(),
                                                 storyId = storyId,
-                                                order = index,
-                                                title = cLink.text().trim(),
-                                                url = cLink.attr("href"),
+                                                order = cLink.key,
+                                                title = cLink.value.text().trim(),
+                                                url = cLink.value.attr("href"),
                                                 uploadedAt = null,
                                                 content = emptyList()
                                             )
                                         }
                                         
-                                        // Avoid UI flicker: only update if data changed
-                                        if (allChapters.size != currentChapters.size || (allChapters.isNotEmpty() && allChapters.first().id != currentChapters.first().id)) {
+                                        // Avoid UI flicker: only update if data changed or story changed
+                                        val isDataChanged = allChapters.size != currentChapters.size || (allChapters.isNotEmpty() && allChapters.first().id != currentChapters.first().id)
+                                        val isDifferentStory = currentChapters.isNotEmpty() && currentChapters.first().storyId != storyId
+
+                                        if (isDifferentStory || isDataChanged) {
                                             currentChapters.clear()
                                             currentChapters.addAll(allChapters)
                                         }
                                         
                                         // Persist if story is in library
                                         if (storyDao.getById(storyId) != null) {
-                                            chapterDao.insertAll(allChapters)
+                                            chapterDao.upsertAll(allChapters)
                                         }
                                         return@launch
                                     }
@@ -393,7 +402,7 @@ class MainActivity : ComponentActivity() {
                                                 // Persist if story is in library
                                                 currentStory?.let { story ->
                                                     if (storyDao.getById(story.id) != null) {
-                                                        chapterDao.insertAll(listOf(updatedChapter))
+                                                        chapterDao.upsertAll(listOf(updatedChapter))
                                                     }
                                                 }
                                             }
@@ -562,29 +571,35 @@ class MainActivity : ComponentActivity() {
                     LaunchedEffect(currentStory?.id, targetLanguage) {
                         val storyId = currentStory?.id ?: return@LaunchedEffect
                         
-                        // Load chapters from DB immediately
+                        // Reset memory state IMMEDIATELY if the story or language changed
+                        if (lastTranslatedStoryId != storyId) {
+                            currentChapters.clear()
+                            translatedChapters.clear()
+                            translatedStory = null
+                            lastTranslatedStoryId = storyId
+                        }
+
+                        // Load chapters from DB
                         val savedChapters = chapterDao.getChaptersForStory(storyId)
                         if (savedChapters.isNotEmpty()) {
+                            // Only load into memory if the scraper hasn't already provided data for this story
                             if (currentChapters.isEmpty() || currentChapters.first().storyId != storyId) {
-                                currentChapters.clear()
                                 currentChapters.addAll(savedChapters)
                             }
                         }
 
                         // Load existing story locale
-                        val existingStoryLocale = storyDao.getLocaleByStoryId(storyId, targetLanguage)
-                        if (existingStoryLocale != null) {
-                            translatedStory = existingStoryLocale
+                        storyDao.getLocaleByStoryId(storyId, targetLanguage)?.let {
+                            translatedStory = it
                         }
                         
                         // Load existing chapter locales
                         val existingLocales = chapterDao.getLocalesForStory(storyId, targetLanguage)
                         if (existingLocales.isNotEmpty()) {
-                            lastTranslatedStoryId = storyId
-                            translatedChapters.clear()
-                            translatedChapters.addAll(existingLocales)
-                        } else if (lastTranslatedStoryId != storyId) {
-                            translatedChapters.clear()
+                            // Only add locales we don't already have (in case scraper+translation finished first)
+                            val existingIds = translatedChapters.map { it.chapterId }.toSet()
+                            val toAdd = existingLocales.filter { it.chapterId !in existingIds }
+                            translatedChapters.addAll(toAdd)
                         }
                     }
 
@@ -595,19 +610,19 @@ class MainActivity : ComponentActivity() {
                     val onSave: () -> Unit = {
                         scope.launch {
                             currentStory?.let { story ->
-                                storyDao.insert(story)
+                                storyDao.upsert(story)
                                 isCurrentStorySaved = true
                                 translatedStory?.let { locale ->
                                     if (locale.storyId == story.id) {
-                                        storyDao.insertLocale(locale)
+                                        storyDao.upsertLocale(locale)
                                     }
                                 }
 
                                 currentChapters.forEach { chapter ->
                                     chapter.storyId = story.id
                                 }
-                                chapterDao.insertAll(currentChapters)
-                                chapterDao.insertAllLocale(translatedChapters.filter { currentChapters.find { c -> c.id == it.chapterId } != null })
+                                chapterDao.upsertAll(currentChapters)
+                                chapterDao.upsertAllLocale(translatedChapters.filter { currentChapters.find { c -> c.id == it.chapterId } != null })
                             }
                         }
                     }
@@ -637,6 +652,7 @@ class MainActivity : ComponentActivity() {
                     }
                     val onShowChapters: () -> Unit = {
                         if (currentStory != null) {
+                            lastScrolledStoryId = null
                             val indexUrl = currentStory!!.url.replace(".html", "/index.html")
                             // Always sync WebView URL when entering chapter list to check for updates
                             webView.loadUrl(indexUrl)
@@ -652,17 +668,6 @@ class MainActivity : ComponentActivity() {
                     val onShowChapter: (Chapter) -> Unit = {
                         webView.loadUrl(it.url)
                         currentChapter = it
-
-                        // Toggle Bookmark to current
-                        scope.launch {
-                            val story = currentStory ?: return@launch
-                            val updatedStory = story.copy(bookmarkedChapterId = it.id)
-                            currentStory = updatedStory
-                            if (storyDao.getById(story.id) != null) {
-                                storyDao.insert(updatedStory)
-                            }
-                        }
-
                         navigateTo(ViewState.CHAPTER)
                     }
                     val onShowLibrary: () -> Unit = {
@@ -699,7 +704,7 @@ class MainActivity : ComponentActivity() {
                             
                             currentStory = updatedStory
                             if (storyDao.getById(story.id) != null) {
-                                storyDao.insert(updatedStory)
+                                storyDao.upsert(updatedStory)
                             }
                         }
                     }
@@ -758,7 +763,7 @@ class MainActivity : ComponentActivity() {
 
                                                     // Only save to DB if story exists in DB
                                                     if (storyDao.getById(story.id) != null) {
-                                                        storyDao.insertLocale(newLocale)
+                                                        storyDao.upsertLocale(newLocale)
                                                     }
                                                 } finally {
                                                     isStoryTranslating = false
@@ -770,16 +775,7 @@ class MainActivity : ComponentActivity() {
 
                                                 listTranslationJob?.cancel()
                                                 listTranslationJob = scope.launch {
-                                                    if (lastTranslatedStoryId != storyId) {
-                                                        translatedChapters.clear()
-                                                        translatingIds.clear()
-
-                                                        val existingLocales = chapterDao.getLocalesForStory(storyId, targetLanguage)
-                                                        val seenIds = mutableSetOf<Int>()
-                                                        val dedupedExisting = existingLocales.filter { seenIds.add(it.chapterId) }
-                                                        translatedChapters.addAll(dedupedExisting)
-                                                        lastTranslatedStoryId = storyId
-                                                    }
+                                                    // Note: We no longer clear here because the LaunchedEffect handles the reset on story transition.
 
                                                     isListTranslating = true
                                                     try {
@@ -819,7 +815,7 @@ class MainActivity : ComponentActivity() {
                                                                     newLocales.forEach { locale ->
                                                                         try {
                                                                             if (chapterDao.getById(locale.chapterId) != null) {
-                                                                                chapterDao.insertLocale(locale)
+                                                                                chapterDao.upsertLocale(locale)
                                                                             }
                                                                         } catch (e: android.database.sqlite.SQLiteConstraintException) {
                                                                             Log.w("Translate", "Skipping locale insert, parent chapter gone: ${locale.chapterId}", e)
@@ -880,7 +876,7 @@ class MainActivity : ComponentActivity() {
                                                             val updatedLocale = translatedChapters[updateIdx].copy(title = tTitle, content = tContent)
                                                             translatedChapters[updateIdx] = updatedLocale
                                                             if (chapterDao.getById(chapter.id) != null) {
-                                                                chapterDao.insertLocale(updatedLocale)
+                                                                chapterDao.upsertLocale(updatedLocale)
                                                             }
                                                         }
                                                     } catch (e: Exception) {
@@ -922,7 +918,7 @@ class MainActivity : ComponentActivity() {
                                                                         tags = results.getOrElse(3) { "" }
                                                                     )
                                                                     allTranslatedStories.add(newLocale)
-                                                                    storyDao.insertLocale(newLocale)
+                                                                    storyDao.upsertLocale(newLocale)
                                                                     delay(2000)
                                                                 } catch (e: Exception) {
                                                                     Log.e("Translate", "Error translating story in library", e)
@@ -1134,7 +1130,9 @@ class MainActivity : ComponentActivity() {
                                             )
                                         ViewState.CHAPTER -> 
                                             currentChapter?.let { chapter ->
-                                                val chapterIndex = currentChapters.indexOfFirst { it.url == chapter.url }
+                                                val chapterIndex = remember(chapter.id) {
+                                                    currentChapters.indexOfFirst { it.url == chapter.url }
+                                                }
                                                 if (chapterIndex != -1) {
                                                     ChapterView(
                                                         chapters = currentChapters,
@@ -1152,14 +1150,13 @@ class MainActivity : ComponentActivity() {
                                                             if (currentChapter?.url != newChapter.url) {
                                                                 currentChapter = newChapter
                                                                 webView.loadUrl(newChapter.url)
-                                                                
-                                                                // Auto-bookmark
+
                                                                 scope.launch {
                                                                     val story = currentStory ?: return@launch
                                                                     val updatedStory = story.copy(bookmarkedChapterId = newChapter.id)
                                                                     currentStory = updatedStory
                                                                     if (storyDao.getById(story.id) != null) {
-                                                                        storyDao.insert(updatedStory)
+                                                                        storyDao.upsert(updatedStory)
                                                                     }
                                                                 }
                                                             }

@@ -1,22 +1,24 @@
 package com.wang.twkanviewer.database
 
 import androidx.room.Dao
-import androidx.room.Insert
-import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Upsert
 import com.wang.twkanviewer.models.Chapter
 import com.wang.twkanviewer.models.ChapterLocale
 
 @Dao
 interface ChapterDao {
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertAll(chapters: List<Chapter>)
+    @Upsert
+    suspend fun upsert(chapter: Chapter)
 
-    @Insert(onConflict = OnConflictStrategy.IGNORE)
-    suspend fun insertLocale(locale: ChapterLocale)
+    @Upsert
+    suspend fun upsertAll(chapters: List<Chapter>)
 
-    @Insert(onConflict = OnConflictStrategy.IGNORE)
-    suspend fun insertAllLocale(locales: List<ChapterLocale>)
+    @Upsert
+    suspend fun upsertLocale(locale: ChapterLocale)
+
+    @Upsert
+    suspend fun upsertAllLocale(locales: List<ChapterLocale>)
 
     @Query("SELECT * FROM chapters WHERE story_id = :storyId ORDER BY `order` ASC")
     suspend fun getChaptersForStory(storyId: Int): List<Chapter>
