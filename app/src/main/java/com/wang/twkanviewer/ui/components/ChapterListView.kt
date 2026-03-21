@@ -122,8 +122,8 @@ fun ChapterListView(
                 .fillMaxWidth()
                 .verticalScrollbar(
                     state = listState,
-                    extraTopInset = 64.dp,    // Corrected parameter name
-                    extraBottomInset = 80.dp  // Corrected parameter name
+                    extraTopInset = 8.dp,
+                    extraBottomInset = 8.dp
                 )
         ) {
             items(

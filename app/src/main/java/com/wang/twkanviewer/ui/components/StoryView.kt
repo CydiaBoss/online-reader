@@ -88,7 +88,11 @@ fun StoryView(
         Box(
             modifier = Modifier
                 .weight(1f)
-                .verticalScrollbar(state = scrollState)
+                .verticalScrollbar(
+                    state = scrollState,
+                    extraTopInset = 8.dp,
+                    extraBottomInset = 8.dp
+                )
         ) {
             Column(
                 modifier = Modifier

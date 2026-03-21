@@ -244,8 +244,8 @@ private fun ChapterPageContent(
             .fillMaxSize()
             .verticalScrollbar(
                 state = scrollState,
-                extraTopInset = if (showBars) 64.dp else 0.dp,
-                extraBottomInset = if (showBars) 80.dp else 0.dp
+                extraTopInset = 8.dp,
+                extraBottomInset = if (showBars) 80.dp else 8.dp
             )
             .clickable(
                 interactionSource = interactionSource,
