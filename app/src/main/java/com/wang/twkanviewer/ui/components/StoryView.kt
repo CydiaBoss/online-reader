@@ -1,14 +1,12 @@
 package com.wang.twkanviewer.ui.components
 
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -53,6 +51,7 @@ fun StoryView(
 ) {
     val dateFormatter = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
     var showDeleteDialog by remember { mutableStateOf(false) }
+    val scrollState = rememberScrollState()
 
     // Determine display values based on translation state
     val displayTitle = if (showTranslate && translatedStory != null) translatedStory.title else story.title
@@ -86,43 +85,49 @@ fun StoryView(
     Column(
         modifier = Modifier.fillMaxSize()
     ) {
-        Column(
+        Box(
             modifier = Modifier
                 .weight(1f)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp)
+                .verticalScrollbar(state = scrollState)
         ) {
-            Text(
-                text = displayTitle,
-                fontSize = 20.sp,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
-            )
-            Text(text = story.author)
-            Spacer(modifier = Modifier.height(10.dp))
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(story.imgUrl)
-                    .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 10; SM-G975F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.198 Mobile Safari/537.36")
-                    .build(),
-                contentDescription = displayTitle,
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .height(200.dp)
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-            Text(text = if (story.completed) stringResource(R.string.status_completed) else stringResource(R.string.status_ongoing))
-            Spacer(modifier = Modifier.height(10.dp))
-            Text(text = stringResource(R.string.word_count_format, story.wordCount))
-            Spacer(modifier = Modifier.height(10.dp))
-            Text(text = stringResource(R.string.last_updated_format, dateFormatter.format(story.lastUpdated)))
-            Spacer(modifier = Modifier.height(10.dp))
-            Text(text = stringResource(R.string.genre_format, displayGenre))
-            Spacer(modifier = Modifier.height(10.dp))
-            Text(text = displayDescription)
-            Spacer(modifier = Modifier.height(10.dp))
-            Text(text = stringResource(R.string.tags_format, displayTags))
-            Spacer(modifier = Modifier.height(10.dp))
+                    .fillMaxSize()
+                    .verticalScroll(scrollState)
+                    .padding(horizontal = 16.dp)
+            ) {
+                Text(
+                    text = displayTitle,
+                    fontSize = 20.sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Text(text = story.author)
+                Spacer(modifier = Modifier.height(10.dp))
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(story.imgUrl)
+                        .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 10; SM-G975F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.198 Mobile Safari/537.36")
+                        .build(),
+                    contentDescription = displayTitle,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(200.dp)
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(text = if (story.completed) stringResource(R.string.status_completed) else stringResource(R.string.status_ongoing))
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(text = stringResource(R.string.word_count_format, story.wordCount))
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(text = stringResource(R.string.last_updated_format, dateFormatter.format(story.lastUpdated)))
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(text = stringResource(R.string.genre_format, displayGenre))
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(text = displayDescription)
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(text = stringResource(R.string.tags_format, displayTags))
+                Spacer(modifier = Modifier.height(10.dp))
+            }
         }
         BottomAppBar(
             modifier = Modifier
