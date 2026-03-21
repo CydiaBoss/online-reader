@@ -65,28 +65,23 @@ fun ChapterView(
     onRefreshClick: (Chapter) -> Unit,
     onNavigateToChapter: (Chapter) -> Unit,
     onBackClick: () -> Unit,
+    showBars: Boolean = true, // Default value to fix the missing parameter error
     onToggleBars: (Boolean) -> Unit = {}
 ) {
-    // pageCount is chapters + 2 dummy pages (index 0 and index chapters.size + 1)
     val pageCount = chapters.size + 2
     val pagerState = rememberPagerState(initialPage = initialIndex + 1) { pageCount }
     val scope = rememberCoroutineScope()
-    var showAppBar by remember { mutableStateOf(true) }
-
-    // Sync visibility with TopAppBar in MainActivity
-    LaunchedEffect(showAppBar) {
-        onToggleBars(showAppBar)
-    }
+    var showAppBar by remember(showBars) { mutableStateOf(showBars) }
 
     // Auto-hide after idle
     LaunchedEffect(showAppBar) {
         if (showAppBar) {
             delay(3000)
             showAppBar = false
+            onToggleBars(false)
         }
     }
 
-    // Sync pager with external index changes (e.g. from list)
     LaunchedEffect(initialIndex) {
         val targetPage = initialIndex + 1
         if (pagerState.currentPage != targetPage) {
@@ -94,13 +89,11 @@ fun ChapterView(
         }
     }
 
-    // Navigation and Boundary Logic
     LaunchedEffect(pagerState.currentPage) {
         when (pagerState.currentPage) {
-            0 -> onBackClick() // Swiped past first chapter
-            pageCount - 1 -> onBackClick() // Swiped past last chapter
+            0 -> onBackClick()
+            pageCount - 1 -> onBackClick()
             else -> {
-                // Real chapter index is currentPage - 1
                 onNavigateToChapter(chapters[pagerState.currentPage - 1])
             }
         }
@@ -114,7 +107,6 @@ fun ChapterView(
         ) { page ->
             when (page) {
                 0, pageCount - 1 -> {
-                    // Dummy boundary pages
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator()
                     }
@@ -129,8 +121,17 @@ fun ChapterView(
                         showTranslate = showTranslate,
                         fontSize = fontSize,
                         fontFamily = fontFamily,
-                        onToggleAppBar = { showAppBar = !showAppBar },
-                        onScrollInProgress = { if (it) showAppBar = false }
+                        showBars = showAppBar,
+                        onToggleAppBar = { 
+                            showAppBar = !showAppBar
+                            onToggleBars(showAppBar)
+                        },
+                        onScrollInProgress = { 
+                            if (it && showAppBar) {
+                                showAppBar = false
+                                onToggleBars(false)
+                            }
+                        }
                     )
                 }
             }
@@ -154,7 +155,6 @@ fun ChapterView(
                     
                     IconButton(
                         onClick = {
-                            // Current page is always > 0 when inside real chapters
                             scope.launch {
                                 pagerState.animateScrollToPage(pagerState.currentPage - 1)
                             }
@@ -163,7 +163,6 @@ fun ChapterView(
                         Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = stringResource(R.string.previous_chapter_content_description))
                     }
 
-                    // Index check for bookmark logic
                     val currentChapterIndex = (pagerState.currentPage - 1).coerceIn(0, chapters.size - 1)
                     val isBookmarked = chapters[currentChapterIndex].id == bookmarkedChapterId
                     
@@ -195,7 +194,6 @@ fun ChapterView(
 
                     IconButton(
                         onClick = {
-                            // Current page is always < pageCount - 1 when inside real chapters
                             scope.launch {
                                 pagerState.animateScrollToPage(pagerState.currentPage + 1)
                             }
@@ -216,6 +214,7 @@ private fun ChapterPageContent(
     showTranslate: Boolean,
     fontSize: Float,
     fontFamily: String,
+    showBars: Boolean,
     onToggleAppBar: () -> Unit,
     onScrollInProgress: (Boolean) -> Unit
 ) {
@@ -226,7 +225,6 @@ private fun ChapterPageContent(
         onScrollInProgress(scrollState.isScrollInProgress)
     }
 
-    // Determine what text to display. Fallback to original text if translation content is missing or empty.
     val isTranslatedAvailable = showTranslate && translatedChapter != null
     val displayTitle = if (isTranslatedAvailable) translatedChapter.title else chapter.title
     val paragraphs = if (isTranslatedAvailable && translatedChapter.content.isNotEmpty())
@@ -244,6 +242,11 @@ private fun ChapterPageContent(
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScrollbar(
+                state = scrollState,
+                extraTopInset = if (showBars) 64.dp else 0.dp,
+                extraBottomInset = if (showBars) 80.dp else 0.dp
+            )
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -261,7 +264,6 @@ private fun ChapterPageContent(
                 .padding(horizontal = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Spacer for TopAppBar overlay
             Spacer(modifier = Modifier.height(24.dp))
 
             Text(
@@ -300,7 +302,7 @@ private fun ChapterPageContent(
                 }
             }
 
-            Spacer(modifier = Modifier.height(100.dp)) // Extra space at bottom
+            Spacer(modifier = Modifier.height(100.dp))
         }
     }
 }

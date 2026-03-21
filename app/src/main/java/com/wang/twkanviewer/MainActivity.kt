@@ -1199,6 +1199,7 @@ class MainActivity : ComponentActivity() {
                                                             }
                                                         },
                                                         onBackClick = onShowChapters,
+                                                        showBars = showTopBar,
                                                         onToggleBars = { visible -> showTopBar = visible }
                                                     )
                                                 }

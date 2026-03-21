@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -53,6 +54,7 @@ fun StoryListView(
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var storyToDelete by remember { mutableStateOf<Story?>(null) }
+    val listState = rememberLazyListState()
 
     val filteredList by remember(stories, showTranslate, translatedStories, searchQuery) {
         derivedStateOf {
@@ -98,9 +100,14 @@ fun StoryListView(
 
     Column(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
+                .verticalScrollbar(
+                    state = listState,
+                    extraBottomInset = 80.dp // Fixed parameter name
+                )
         ) {
             items(filteredList) { (story, locale) ->
                 val displayTitle = if (showTranslate && locale != null) locale.title else story.title
