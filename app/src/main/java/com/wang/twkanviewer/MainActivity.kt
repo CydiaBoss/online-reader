@@ -6,6 +6,8 @@ import android.util.Log
 import android.view.ViewGroup
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
@@ -194,10 +196,30 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
+                    // Library logic
+                    val targetLanguage = remember {
+                        TranslateLanguage.fromLanguageTag(Locale.getDefault().language) ?: TranslateLanguage.ENGLISH
+                    }
+
+                    val onShowLibrary: () -> Unit = {
+                        scope.launch {
+                            allStories.clear()
+                            allStories.addAll(storyDao.getAll())
+                            allTranslatedStories.clear()
+                            allStories.forEach { story ->
+                                storyDao.getLocaleByStoryId(story.id, targetLanguage)?.let {
+                                    allTranslatedStories.add(it)
+                                }
+                            }
+                            navigateTo(ViewState.STORY_LIST)
+                        }
+                    }
+
                     // WebView
                     val defaultUrl = stringResource(id = R.string.default_url)
                     val defaultUserAgent = stringResource(id = R.string.default_user_agent)
                     var currentUrl by remember { mutableStateOf(defaultUrl) }
+                    var isInitialLoad by remember { mutableStateOf(true) }
                     
                     @SuppressLint("SetJavaScriptEnabled")
                     val webView = remember {
@@ -420,6 +442,7 @@ class MainActivity : ComponentActivity() {
 
                             webViewClient = object : WebViewClient() {
                                 override fun onPageFinished(view: WebView?, url: String?) {
+                                    isInitialLoad = false
                                     // Scrap website for story details
                                     if (url != null) {
                                         evaluateJavascript("""
@@ -465,6 +488,17 @@ class MainActivity : ComponentActivity() {
                                     currentUrl = urlLocal!!
                                     super.doUpdateVisitedHistory(view, urlLocal, isReload)
                                 }
+
+                                override fun onReceivedError(
+                                    view: WebView?,
+                                    request: WebResourceRequest?,
+                                    error: WebResourceError?
+                                ) {
+                                    super.onReceivedError(view, request, error)
+                                    if (request?.isForMainFrame == true && isInitialLoad) {
+                                        onShowLibrary()
+                                    }
+                                }
                             }
                             webChromeClient = WebChromeClient() // Add this
 
@@ -496,9 +530,6 @@ class MainActivity : ComponentActivity() {
                     }
 
                     // Translator
-                    val targetLanguage = remember {
-                        TranslateLanguage.fromLanguageTag(Locale.getDefault().language) ?: TranslateLanguage.ENGLISH
-                    }
                     val translator = remember(targetLanguage) {
                         val options = TranslatorOptions.Builder()
                             .setSourceLanguage(TranslateLanguage.CHINESE)
@@ -674,19 +705,6 @@ class MainActivity : ComponentActivity() {
                         webView.loadUrl(it.url)
                         currentChapter = it
                         navigateTo(ViewState.CHAPTER)
-                    }
-                    val onShowLibrary: () -> Unit = {
-                        scope.launch {
-                            allStories.clear()
-                            allStories.addAll(storyDao.getAll())
-                            allTranslatedStories.clear()
-                            allStories.forEach { story ->
-                                storyDao.getLocaleByStoryId(story.id, targetLanguage)?.let {
-                                    allTranslatedStories.add(it)
-                                }
-                            }
-                            navigateTo(ViewState.STORY_LIST)
-                        }
                     }
                     val onDeleteStory: (Story) -> Unit = { story ->
                         scope.launch {
@@ -1143,6 +1161,28 @@ class MainActivity : ComponentActivity() {
                                                         },
                                                         fontFamily = chapterFontFamily,
                                                         onBookmarkClick = onToggleBookmark,
+                                                        onRefreshClick = { targetChapter ->
+                                                            scope.launch {
+                                                                // 1. Delete from DB
+                                                                chapterDao.deleteLocalesForChapter(targetChapter.id)
+                                                                chapterDao.clearChapterContent(targetChapter.id)
+                                                                
+                                                                // 2. Clear from memory
+                                                                val index = currentChapters.indexOfFirst { it.id == targetChapter.id }
+                                                                if (index != -1) {
+                                                                    currentChapters[index] = currentChapters[index].copy(content = emptyList(), uploadedAt = null)
+                                                                }
+                                                                
+                                                                if (currentChapter?.id == targetChapter.id) {
+                                                                    currentChapter = currentChapter?.copy(content = emptyList(), uploadedAt = null)
+                                                                }
+                                                                
+                                                                translatedChapters.removeAll { it.chapterId == targetChapter.id }
+                                                                
+                                                                // 3. Rescrap by reloading page
+                                                                webView.reload()
+                                                            }
+                                                        },
                                                         onNavigateToChapter = { newChapter ->
                                                             if (currentChapter?.url != newChapter.url) {
                                                                 currentChapter = newChapter

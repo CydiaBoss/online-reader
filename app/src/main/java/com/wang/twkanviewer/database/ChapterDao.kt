@@ -27,6 +27,12 @@ interface ChapterDao {
     @Query("UPDATE chapter_locales SET title = :title WHERE chapter_id = :chapterId AND language = :language")
     suspend fun updateLocaleTitle(chapterId: Int, language: String, title: String)
 
+    @Query("DELETE FROM chapter_locales WHERE chapter_id = :chapterId")
+    suspend fun deleteLocalesForChapter(chapterId: Int)
+
+    @Query("UPDATE chapters SET content = '', uploaded_at = NULL WHERE id = :chapterId")
+    suspend fun clearChapterContent(chapterId: Int)
+
     @Query("SELECT * FROM chapters WHERE story_id = :storyId ORDER BY `order` ASC")
     suspend fun getChaptersForStory(storyId: Int): List<Chapter>
 

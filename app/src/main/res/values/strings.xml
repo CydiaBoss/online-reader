@@ -48,6 +48,7 @@
     <string name="previous_chapter_content_description">Previous Chapter</string>
     <string name="next_chapter_content_description">Next Chapter</string>
     <string name="bookmark_content_description">Bookmark</string>
+    <string name="refresh_button_content_description">Refresh Content</string>
     <string name="font_decrease" translatable="false">A-</string>
     <string name="font_increase" translatable="false">A+</string>
 

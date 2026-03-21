@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
@@ -61,6 +62,7 @@ fun ChapterView(
     onFontSizeChange: (Float) -> Unit,
     fontFamily: String,
     onBookmarkClick: () -> Unit,
+    onRefreshClick: (Chapter) -> Unit,
     onNavigateToChapter: (Chapter) -> Unit,
     onBackClick: () -> Unit,
     onToggleBars: (Boolean) -> Unit = {}
@@ -171,6 +173,10 @@ fun ChapterView(
                             contentDescription = stringResource(R.string.bookmark_content_description),
                             tint = if (isBookmarked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                         )
+                    }
+
+                    IconButton(onClick = { onRefreshClick(chapters[currentChapterIndex]) }) {
+                        Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.refresh_button_content_description))
                     }
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -288,13 +294,13 @@ private fun ChapterPageContent(
                         fontFamily = composeFontFamily,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(bottom = 12.dp)
+                            .padding(vertical = 8.dp),
+                        textAlign = TextAlign.Left
                     )
                 }
             }
 
-            // Spacer for BottomAppBar overlay
-            Spacer(modifier = Modifier.height(64.dp))
+            Spacer(modifier = Modifier.height(100.dp)) // Extra space at bottom
         }
     }
 }
