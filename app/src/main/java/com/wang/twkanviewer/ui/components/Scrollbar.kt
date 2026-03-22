@@ -54,8 +54,9 @@ fun Modifier.verticalScrollbar(
 
         val layoutInfo = state.layoutInfo
         val visibleItemsInfo = layoutInfo.visibleItemsInfo
-        if (visibleItemsInfo.isEmpty() || layoutInfo.totalItemsCount <= visibleItemsInfo.size) return@drawWithContent
+        if (visibleItemsInfo.isEmpty()) return@drawWithContent
 
+        val totalItemsCount = layoutInfo.totalItemsCount
         val viewportHeight = size.height
         val topPx = extraTopInset.toPx()
         val bottomPx = extraBottomInset.toPx()
@@ -63,27 +64,36 @@ fun Modifier.verticalScrollbar(
         
         if (trackHeight <= 0) return@drawWithContent
 
-        val totalItemsCount = layoutInfo.totalItemsCount
+        // Estimate how many items fit in the viewport based on current average visible size
+        val averageItemSize = visibleItemsInfo.map { it.size }.average().toFloat().coerceAtLeast(1f)
+        val itemsInViewport = trackHeight / averageItemSize
+        
+        // No scrollbar needed if content fits on one screen
+        if (totalItemsCount <= itemsInViewport) return@drawWithContent
+
         val minHeightPx = 32.dp.toPx()
         val maxHeightPx = trackHeight * 0.3f
 
-        // Thumb height
-        val thumbHeight = (trackHeight * (visibleItemsInfo.size.toFloat() / totalItemsCount))
+        // Thumb height proportional to ratio of visible items
+        val thumbHeight = (trackHeight * (itemsInViewport / totalItemsCount))
             .coerceIn(minHeightPx.coerceAtMost(trackHeight), maxHeightPx)
 
         // Seamless Progress calculation using pixel offsets
         val firstVisibleItem = visibleItemsInfo.first()
-        val itemHeight = firstVisibleItem.size.toFloat()
         val scrollOffset = state.firstVisibleItemScrollOffset.toFloat()
-        val scrollProgressInsideItem = if (itemHeight > 0) scrollOffset / itemHeight else 0f
+        val scrollProgressInsideItem = scrollOffset / averageItemSize
         
-        val totalProgress = (firstVisibleItem.index + scrollProgressInsideItem) / totalItemsCount.toFloat()
-        val offset = topPx + (totalProgress * (trackHeight - thumbHeight))
+        // DIVISOR FIX: The scrollable range is the total items minus the ones already visible in the viewport
+        val scrollableRange = (totalItemsCount - itemsInViewport).coerceAtLeast(1f)
+        val totalProgress = (firstVisibleItem.index + scrollProgressInsideItem) / scrollableRange
+        
+        // MAPPING FIX: Map 0..1 progress to the available track space (top to trackBottom - thumb)
+        val offset = topPx + (totalProgress.coerceIn(0f, 1f) * (trackHeight - thumbHeight))
 
         if (alpha > 0f) {
             drawRoundRect(
                 color = scrollbarColor,
-                topLeft = Offset(size.width - width.toPx() - 4.dp.toPx(), offset.coerceIn(topPx, topPx + trackHeight - thumbHeight)),
+                topLeft = Offset(size.width - width.toPx() - 4.dp.toPx(), offset),
                 size = Size(width.toPx(), thumbHeight),
                 cornerRadius = CornerRadius(width.toPx() / 2, width.toPx() / 2),
                 alpha = alpha
@@ -133,15 +143,15 @@ fun Modifier.verticalScrollbar(
         val maxValue = state.maxValue.toFloat()
         if (maxValue <= 0) return@drawWithContent
 
-        val totalContentHeight = viewportHeight + maxValue
+        val totalContentHeight = trackHeight + maxValue
         val minHeightPx = 48.dp.toPx()
         val maxHeightPx = trackHeight * 0.3f
 
-        val thumbHeight = (trackHeight * (viewportHeight / totalContentHeight))
+        val thumbHeight = (trackHeight * (trackHeight / totalContentHeight))
             .coerceIn(minHeightPx.coerceAtMost(trackHeight), maxHeightPx)
 
         val progress = state.value.toFloat() / maxValue
-        val offset = topPx + (progress * (trackHeight - thumbHeight))
+        val offset = topPx + (progress.coerceIn(0f, 1f) * (trackHeight - thumbHeight))
 
         if (alpha > 0f) {
             drawRoundRect(

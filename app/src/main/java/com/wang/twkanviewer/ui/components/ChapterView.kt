@@ -40,6 +40,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -148,12 +149,15 @@ fun ChapterView(
                 LinearProgressIndicator(
                     progress = {
                         if (chapters.isEmpty()) 0f
-                        else (pagerState.currentPage - 1).coerceIn(0, chapters.size - 1).toFloat() /
-                                (chapters.size - 1).coerceAtLeast(1)
+                        else {
+                            val realPage = (pagerState.currentPage - 1).coerceIn(0, chapters.size - 1)
+                            (realPage.toFloat() / chapters.size).coerceIn(0f, 0.99f)
+                        }
                     },
                     modifier = Modifier.fillMaxWidth(),
                     color = MaterialTheme.colorScheme.primary,
-                    trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                    strokeCap = StrokeCap.Butt
                 )
                 BottomAppBar {
                     Row(
