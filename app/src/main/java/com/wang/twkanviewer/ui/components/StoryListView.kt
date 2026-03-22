@@ -106,8 +106,8 @@ fun StoryListView(
                 .fillMaxWidth()
                 .verticalScrollbar(
                     state = listState,
-                    extraTopInset = 8.dp,
-                    extraBottomInset = 8.dp
+                    extraTopInset = 4.dp,
+                    extraBottomInset = 4.dp
                 )
         ) {
             items(filteredList) { (story, locale) ->

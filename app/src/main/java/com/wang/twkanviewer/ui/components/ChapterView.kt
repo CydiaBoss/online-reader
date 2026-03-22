@@ -155,8 +155,9 @@ fun ChapterView(
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
+                    gapSize = 0.dp,
                     color = MaterialTheme.colorScheme.primary,
-                    trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
                     strokeCap = StrokeCap.Butt
                 )
                 BottomAppBar {
