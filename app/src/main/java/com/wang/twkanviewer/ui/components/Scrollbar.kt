@@ -65,22 +65,25 @@ fun Modifier.verticalScrollbar(
 
         val totalItemsCount = layoutInfo.totalItemsCount
         val minHeightPx = 32.dp.toPx()
-        val maxHeightPx = trackHeight * 0.3f // Cap thumb height at 30% of track
+        val maxHeightPx = trackHeight * 0.3f
 
-        // Thumb height proportional to the ratio of visible items
+        // Thumb height
         val thumbHeight = (trackHeight * (visibleItemsInfo.size.toFloat() / totalItemsCount))
             .coerceIn(minHeightPx.coerceAtMost(trackHeight), maxHeightPx)
 
+        // Seamless Progress calculation using pixel offsets
         val firstVisibleItem = visibleItemsInfo.first()
-        val scrollableItemsCount = (totalItemsCount - visibleItemsInfo.size).coerceAtLeast(1)
-        val progress = firstVisibleItem.index.toFloat() / scrollableItemsCount
+        val itemHeight = firstVisibleItem.size.toFloat()
+        val scrollOffset = state.firstVisibleItemScrollOffset.toFloat()
+        val scrollProgressInsideItem = if (itemHeight > 0) scrollOffset / itemHeight else 0f
         
-        val offset = topPx + (progress * (trackHeight - thumbHeight))
+        val totalProgress = (firstVisibleItem.index + scrollProgressInsideItem) / totalItemsCount.toFloat()
+        val offset = topPx + (totalProgress * (trackHeight - thumbHeight))
 
         if (alpha > 0f) {
             drawRoundRect(
                 color = scrollbarColor,
-                topLeft = Offset(size.width - width.toPx() - 4.dp.toPx(), offset),
+                topLeft = Offset(size.width - width.toPx() - 4.dp.toPx(), offset.coerceIn(topPx, topPx + trackHeight - thumbHeight)),
                 size = Size(width.toPx(), thumbHeight),
                 cornerRadius = CornerRadius(width.toPx() / 2, width.toPx() / 2),
                 alpha = alpha
@@ -132,13 +135,11 @@ fun Modifier.verticalScrollbar(
 
         val totalContentHeight = viewportHeight + maxValue
         val minHeightPx = 48.dp.toPx()
-        val maxHeightPx = trackHeight * 0.3f // Cap thumb height at 30% of track
+        val maxHeightPx = trackHeight * 0.3f
 
-        // Thumb height proportional to viewport/content ratio
         val thumbHeight = (trackHeight * (viewportHeight / totalContentHeight))
             .coerceIn(minHeightPx.coerceAtMost(trackHeight), maxHeightPx)
 
-        // Map scroll progress (0..1) to track offset
         val progress = state.value.toFloat() / maxValue
         val offset = topPx + (progress * (trackHeight - thumbHeight))
 

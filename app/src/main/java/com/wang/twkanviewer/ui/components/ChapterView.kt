@@ -28,6 +28,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -143,63 +144,75 @@ fun ChapterView(
             exit = slideOutVertically(targetOffsetY = { it }),
             modifier = Modifier.align(Alignment.BottomCenter)
         ) {
-            BottomAppBar {
-                Row(
+            Column {
+                LinearProgressIndicator(
+                    progress = {
+                        if (chapters.isEmpty()) 0f
+                        else (pagerState.currentPage - 1).coerceIn(0, chapters.size - 1).toFloat() /
+                                (chapters.size - 1).coerceAtLeast(1)
+                    },
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(onClick = onBackClick) {
-                        Icon(Icons.AutoMirrored.Filled.List, contentDescription = stringResource(R.string.chapter_list_content_description))
-                    }
-                    
-                    IconButton(
-                        onClick = {
-                            scope.launch {
-                                pagerState.animateScrollToPage(pagerState.currentPage - 1)
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                )
+                BottomAppBar {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(onClick = onBackClick) {
+                            Icon(Icons.AutoMirrored.Filled.List, contentDescription = stringResource(R.string.chapter_list_content_description))
+                        }
+                        
+                        IconButton(
+                            onClick = {
+                                scope.launch {
+                                    pagerState.animateScrollToPage(pagerState.currentPage - 1)
+                                }
+                            }
+                        ) {
+                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = stringResource(R.string.previous_chapter_content_description))
+                        }
+
+                        val currentChapterIndex = (pagerState.currentPage - 1).coerceIn(0, chapters.size - 1)
+                        val isBookmarked = chapters[currentChapterIndex].id == bookmarkedChapterId
+                        
+                        IconButton(onClick = onBookmarkClick) {
+                            Icon(
+                                painter = painterResource(id = if (isBookmarked) R.drawable.filled_bookmark_24px else R.drawable.bookmark_24px),
+                                contentDescription = stringResource(R.string.bookmark_content_description),
+                                tint = if (isBookmarked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+
+                        IconButton(onClick = { onRefreshClick(chapters[currentChapterIndex]) }) {
+                            Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.refresh_button_content_description))
+                        }
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(onClick = { onFontSizeChange(fontSize - 1f) }) {
+                                Text(stringResource(R.string.font_decrease), style = MaterialTheme.typography.labelLarge)
+                            }
+                            Text(
+                                text = fontSize.toInt().toString(),
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.padding(horizontal = 4.dp)
+                            )
+                            IconButton(onClick = { onFontSizeChange(fontSize + 1f) }) {
+                                Text(stringResource(R.string.font_increase), style = MaterialTheme.typography.labelLarge)
                             }
                         }
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = stringResource(R.string.previous_chapter_content_description))
-                    }
 
-                    val currentChapterIndex = (pagerState.currentPage - 1).coerceIn(0, chapters.size - 1)
-                    val isBookmarked = chapters[currentChapterIndex].id == bookmarkedChapterId
-                    
-                    IconButton(onClick = onBookmarkClick) {
-                        Icon(
-                            painter = painterResource(id = if (isBookmarked) R.drawable.filled_bookmark_24px else R.drawable.bookmark_24px),
-                            contentDescription = stringResource(R.string.bookmark_content_description),
-                            tint = if (isBookmarked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-
-                    IconButton(onClick = { onRefreshClick(chapters[currentChapterIndex]) }) {
-                        Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.refresh_button_content_description))
-                    }
-
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = { onFontSizeChange(fontSize - 1f) }) {
-                            Text(stringResource(R.string.font_decrease), style = MaterialTheme.typography.labelLarge)
-                        }
-                        Text(
-                            text = fontSize.toInt().toString(),
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(horizontal = 4.dp)
-                        )
-                        IconButton(onClick = { onFontSizeChange(fontSize + 1f) }) {
-                            Text(stringResource(R.string.font_increase), style = MaterialTheme.typography.labelLarge)
-                        }
-                    }
-
-                    IconButton(
-                        onClick = {
-                            scope.launch {
-                                pagerState.animateScrollToPage(pagerState.currentPage + 1)
+                        IconButton(
+                            onClick = {
+                                scope.launch {
+                                    pagerState.animateScrollToPage(pagerState.currentPage + 1)
+                                }
                             }
+                        ) {
+                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = stringResource(R.string.next_chapter_content_description))
                         }
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = stringResource(R.string.next_chapter_content_description))
                     }
                 }
             }
