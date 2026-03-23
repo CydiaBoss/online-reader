@@ -151,14 +151,16 @@ fun ChapterView(
                         if (chapters.isEmpty()) 0f
                         else {
                             val realPage = (pagerState.currentPage - 1).coerceIn(0, chapters.size - 1)
-                            (realPage.toFloat() / chapters.size).coerceIn(0f, 0.99f)
+                            val totalSteps = if (chapters.size > 1) chapters.size - 1 else 1
+                            (realPage.toFloat() / totalSteps).coerceIn(0f, 1f)
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
                     gapSize = 0.dp,
                     color = MaterialTheme.colorScheme.primary,
                     trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                    strokeCap = StrokeCap.Butt
+                    strokeCap = StrokeCap.Butt,
+                    drawStopIndicator = {} // Removes the dot at the end of the track by providing an empty draw lambda
                 )
                 BottomAppBar {
                     Row(

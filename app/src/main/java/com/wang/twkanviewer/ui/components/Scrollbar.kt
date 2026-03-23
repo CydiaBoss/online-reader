@@ -3,12 +3,14 @@ package com.wang.twkanviewer.ui.components
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
@@ -17,9 +19,11 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * Vertical Scrollbar for LazyColumn (LazyListState)
@@ -33,9 +37,11 @@ fun Modifier.verticalScrollbar(
 ): Modifier = composed {
     val scrollbarColor = color ?: MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
     var isScrolling by remember { mutableStateOf(false) }
+    var isDragging by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
-    LaunchedEffect(state.isScrollInProgress) {
-        if (state.isScrollInProgress) {
+    LaunchedEffect(state.isScrollInProgress, isDragging) {
+        if (state.isScrollInProgress || isDragging) {
             isScrolling = true
         } else {
             delay(1500)
@@ -68,7 +74,6 @@ fun Modifier.verticalScrollbar(
         val averageItemSize = visibleItemsInfo.map { it.size }.average().toFloat().coerceAtLeast(1f)
         val itemsInViewport = trackHeight / averageItemSize
         
-        // No scrollbar needed if content fits on one screen
         if (totalItemsCount <= itemsInViewport) return@drawWithContent
 
         val minHeightPx = 32.dp.toPx()
@@ -83,11 +88,10 @@ fun Modifier.verticalScrollbar(
         val scrollOffset = state.firstVisibleItemScrollOffset.toFloat()
         val scrollProgressInsideItem = scrollOffset / averageItemSize
         
-        // DIVISOR FIX: The scrollable range is the total items minus the ones already visible in the viewport
         val scrollableRange = (totalItemsCount - itemsInViewport).coerceAtLeast(1f)
         val totalProgress = (firstVisibleItem.index + scrollProgressInsideItem) / scrollableRange
         
-        // MAPPING FIX: Map 0..1 progress to the available track space (top to trackBottom - thumb)
+        // Map 0..1 progress to (topPx .. topPx + trackHeight - thumbHeight)
         val offset = topPx + (totalProgress.coerceIn(0f, 1f) * (trackHeight - thumbHeight))
 
         if (alpha > 0f) {
@@ -99,6 +103,44 @@ fun Modifier.verticalScrollbar(
                 alpha = alpha
             )
         }
+    }
+    .pointerInput(state, extraTopInset, extraBottomInset) {
+        detectDragGestures(
+            onDragStart = { offset ->
+                if (offset.x >= size.width - 48.dp.toPx()) {
+                    isDragging = true
+                }
+            },
+            onDragEnd = { isDragging = false },
+            onDragCancel = { isDragging = false },
+            onDrag = { change, _ ->
+                if (isDragging) {
+                    val layoutInfo = state.layoutInfo
+                    if (layoutInfo.visibleItemsInfo.isEmpty()) return@detectDragGestures
+                    
+                    val topPx = extraTopInset.toPx()
+                    val bottomPx = extraBottomInset.toPx()
+                    val trackHeight = size.height - topPx - bottomPx
+                    
+                    val averageItemSize = layoutInfo.visibleItemsInfo.map { it.size }.average().toFloat().coerceAtLeast(1f)
+                    val itemsInViewport = trackHeight / averageItemSize
+                    val thumbHeight = (trackHeight * (itemsInViewport / layoutInfo.totalItemsCount))
+                        .coerceIn(32.dp.toPx().coerceAtMost(trackHeight), trackHeight * 0.3f)
+
+                    val relativeY = change.position.y - topPx - (thumbHeight / 2)
+                    val progress = (relativeY / (trackHeight - thumbHeight)).coerceIn(0f, 1f)
+                    
+                    val scrollableRange = (layoutInfo.totalItemsCount - itemsInViewport).coerceAtLeast(1f)
+                    val targetScrollValue = progress * scrollableRange
+                    val index = targetScrollValue.toInt()
+                    val offset = ((targetScrollValue - index) * averageItemSize).toInt()
+                    
+                    scope.launch {
+                        state.scrollToItem(index, offset)
+                    }
+                }
+            }
+        )
     }
 }
 
@@ -114,9 +156,11 @@ fun Modifier.verticalScrollbar(
 ): Modifier = composed {
     val scrollbarColor = color ?: MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
     var isScrolling by remember { mutableStateOf(false) }
+    var isDragging by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
-    LaunchedEffect(state.isScrollInProgress) {
-        if (state.isScrollInProgress) {
+    LaunchedEffect(state.isScrollInProgress, isDragging) {
+        if (state.isScrollInProgress || isDragging) {
             isScrolling = true
         } else {
             delay(1500)
@@ -162,5 +206,35 @@ fun Modifier.verticalScrollbar(
                 alpha = alpha
             )
         }
+    }
+    .pointerInput(state, extraTopInset, extraBottomInset) {
+        detectDragGestures(
+            onDragStart = { offset ->
+                if (offset.x >= size.width - 48.dp.toPx()) {
+                    isDragging = true
+                }
+            },
+            onDragEnd = { isDragging = false },
+            onDragCancel = { isDragging = false },
+            onDrag = { change, _ ->
+                if (isDragging) {
+                    val topPx = extraTopInset.toPx()
+                    val bottomPx = extraBottomInset.toPx()
+                    val trackHeight = size.height - topPx - bottomPx
+                    
+                    val maxValue = state.maxValue.toFloat()
+                    val totalContentHeight = trackHeight + maxValue
+                    val thumbHeight = (trackHeight * (trackHeight / totalContentHeight))
+                        .coerceIn(48.dp.toPx().coerceAtMost(trackHeight), trackHeight * 0.3f)
+
+                    val relativeY = change.position.y - topPx - (thumbHeight / 2)
+                    val progress = (relativeY / (trackHeight - thumbHeight)).coerceIn(0f, 1f)
+                    
+                    scope.launch {
+                        state.scrollTo((progress * maxValue).toInt())
+                    }
+                }
+            }
+        )
     }
 }
