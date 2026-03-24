@@ -3,7 +3,7 @@ package com.wang.twkanviewer.ui.components
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ScrollState
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.LaunchedEffect
@@ -70,7 +70,6 @@ fun Modifier.verticalScrollbar(
         
         if (trackHeight <= 0) return@drawWithContent
 
-        // Estimate how many items fit in the viewport based on current average visible size
         val averageItemSize = visibleItemsInfo.map { it.size }.average().toFloat().coerceAtLeast(1f)
         val itemsInViewport = trackHeight / averageItemSize
         
@@ -79,11 +78,9 @@ fun Modifier.verticalScrollbar(
         val minHeightPx = 32.dp.toPx()
         val maxHeightPx = trackHeight * 0.3f
 
-        // Thumb height proportional to ratio of visible items
         val thumbHeight = (trackHeight * (itemsInViewport / totalItemsCount))
             .coerceIn(minHeightPx.coerceAtMost(trackHeight), maxHeightPx)
 
-        // Seamless Progress calculation using pixel offsets
         val firstVisibleItem = visibleItemsInfo.first()
         val scrollOffset = state.firstVisibleItemScrollOffset.toFloat()
         val scrollProgressInsideItem = scrollOffset / averageItemSize
@@ -91,7 +88,6 @@ fun Modifier.verticalScrollbar(
         val scrollableRange = (totalItemsCount - itemsInViewport).coerceAtLeast(1f)
         val totalProgress = (firstVisibleItem.index + scrollProgressInsideItem) / scrollableRange
         
-        // Map 0..1 progress to (topPx .. topPx + trackHeight - thumbHeight)
         val offset = topPx + (totalProgress.coerceIn(0f, 1f) * (trackHeight - thumbHeight))
 
         if (alpha > 0f) {
@@ -105,7 +101,7 @@ fun Modifier.verticalScrollbar(
         }
     }
     .pointerInput(state, extraTopInset, extraBottomInset) {
-        detectDragGestures(
+        detectVerticalDragGestures(
             onDragStart = { offset ->
                 if (offset.x >= size.width - 48.dp.toPx()) {
                     isDragging = true
@@ -113,10 +109,10 @@ fun Modifier.verticalScrollbar(
             },
             onDragEnd = { isDragging = false },
             onDragCancel = { isDragging = false },
-            onDrag = { change, _ ->
+            onVerticalDrag = { change, _ ->
                 if (isDragging) {
                     val layoutInfo = state.layoutInfo
-                    if (layoutInfo.visibleItemsInfo.isEmpty()) return@detectDragGestures
+                    if (layoutInfo.visibleItemsInfo.isEmpty()) return@detectVerticalDragGestures
                     
                     val topPx = extraTopInset.toPx()
                     val bottomPx = extraBottomInset.toPx()
@@ -138,6 +134,7 @@ fun Modifier.verticalScrollbar(
                     scope.launch {
                         state.scrollToItem(index, offset)
                     }
+                    change.consume()
                 }
             }
         )
@@ -208,7 +205,7 @@ fun Modifier.verticalScrollbar(
         }
     }
     .pointerInput(state, extraTopInset, extraBottomInset) {
-        detectDragGestures(
+        detectVerticalDragGestures(
             onDragStart = { offset ->
                 if (offset.x >= size.width - 48.dp.toPx()) {
                     isDragging = true
@@ -216,7 +213,7 @@ fun Modifier.verticalScrollbar(
             },
             onDragEnd = { isDragging = false },
             onDragCancel = { isDragging = false },
-            onDrag = { change, _ ->
+            onVerticalDrag = { change, _ ->
                 if (isDragging) {
                     val topPx = extraTopInset.toPx()
                     val bottomPx = extraBottomInset.toPx()
@@ -233,6 +230,7 @@ fun Modifier.verticalScrollbar(
                     scope.launch {
                         state.scrollTo((progress * maxValue).toInt())
                     }
+                    change.consume()
                 }
             }
         )

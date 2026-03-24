@@ -3,8 +3,7 @@ package com.wang.twkanviewer.ui.components
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -41,6 +40,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -239,7 +239,6 @@ private fun ChapterPageContent(
     onScrollInProgress: (Boolean) -> Unit
 ) {
     val scrollState = rememberScrollState()
-    val interactionSource = remember { MutableInteractionSource() }
 
     LaunchedEffect(scrollState.isScrollInProgress) {
         onScrollInProgress(scrollState.isScrollInProgress)
@@ -267,11 +266,11 @@ private fun ChapterPageContent(
                 extraTopInset = 8.dp,
                 extraBottomInset = if (showBars) 80.dp else 8.dp
             )
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onToggleAppBar
-            )
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = { onToggleAppBar() }
+                )
+            }
     ) {
         if (paragraphs.isEmpty()) {
             CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
