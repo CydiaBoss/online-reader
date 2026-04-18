@@ -35,10 +35,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.wang.twkanviewer.R
 import com.wang.twkanviewer.models.Story
 import com.wang.twkanviewer.models.StoryLocale
@@ -114,11 +117,22 @@ fun StoryListView(
                 val displayTitle = if (showTranslate && locale != null) locale.title else story.title
                 val displayDescription = if (showTranslate && locale != null) locale.description else story.description
 
+                // Ensure absolute URL for relative paths stored in DB
+                val imageUrl = remember(story.imgUrl) {
+                    if (story.imgUrl.startsWith("/")) "https://twkan.com${story.imgUrl}" else story.imgUrl
+                }
+
                 ListItem(
                     modifier = Modifier.clickable { onStoryClick(story) },
                     leadingContent = {
                         AsyncImage(
-                            model = story.imgUrl,
+                            model = ImageRequest.Builder(LocalContext.current)
+                                .data(imageUrl)
+                                .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 10; SM-G975F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.198 Mobile Safari/537.36")
+                                .crossfade(true)
+                                .build(),
+                            placeholder = painterResource(R.drawable.auto_stories_24px),
+                            error = painterResource(R.drawable.auto_stories_24px),
                             contentDescription = null,
                             modifier = Modifier
                                 .size(60.dp, 80.dp)

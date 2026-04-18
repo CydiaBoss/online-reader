@@ -25,6 +25,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -112,11 +113,15 @@ fun StoryView(
                     model = ImageRequest.Builder(LocalContext.current)
                         .data(story.imgUrl)
                         .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 10; SM-G975F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.198 Mobile Safari/537.36")
+                        .crossfade(true)
                         .build(),
+                    placeholder = painterResource(R.drawable.auto_stories_24px),
+                    error = painterResource(R.drawable.auto_stories_24px),
                     contentDescription = displayTitle,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(200.dp)
+                        .height(250.dp),
+                    contentScale = ContentScale.Fit
                 )
                 Spacer(modifier = Modifier.height(10.dp))
                 Text(text = if (story.completed) stringResource(R.string.status_completed) else stringResource(R.string.status_ongoing))

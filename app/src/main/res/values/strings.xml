@@ -64,6 +64,14 @@
     <string name="reader_section">Reader</string>
     <string name="chapter_font_size_label">Chapter Font Size: %1$dsp</string>
     <string name="chapter_font_family_label">Chapter Font Family</string>
+    <string name="about_section">About</string>
+    <string name="version_label">Version: %1$s</string>
+    <string name="check_updates_button">Check for Updates</string>
+    <string name="checking_updates">Checking for updates…</string>
+    <string name="no_updates_found">You are using the latest version.</string>
+    <string name="update_found_title">Update Available</string>
+    <string name="update_found_message">A new version (%1$s) is available. Would you like to download and install it?</string>
+    <string name="update_button">Update</string>
 
     <!-- Main Activity Dialogs -->
     <string name="unsaved_changes_title">Unsaved Changes</string>

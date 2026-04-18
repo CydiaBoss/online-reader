@@ -244,8 +244,8 @@ class MainActivity : ComponentActivity() {
                                             .replace("\\t", "\t")
                                             .replace("\\\"", "\"")
 
-                                    // Parse the HTML with Jsoup
-                                    val doc = Ksoup.parse(unescapedHtml)
+                                    // Parse the HTML with Jsoup - using loadedUrl as baseUri for absUrl
+                                    val doc = Ksoup.parse(unescapedHtml, loadedUrl)
 
                                     // Process if book URL
                                     val matchBookUrl = regexBook.find(loadedUrl)
@@ -260,8 +260,9 @@ class MainActivity : ComponentActivity() {
                                         val title =
                                             doc.selectFirst("div.booknav2 h1 a")?.text()
                                                 ?: existingStory?.title ?: ""
+                                        // Use absUrl to handle relative image paths
                                         val imgUrl =
-                                            doc.selectFirst("div.bookimg2 img")?.attr("src")
+                                            doc.selectFirst("div.bookimg2 img")?.absUrl("src")
                                                 ?: existingStory?.imgUrl ?: ""
                                         val genre =
                                             doc.selectFirst("div.booknav2 a[href*=/novels/class/]")

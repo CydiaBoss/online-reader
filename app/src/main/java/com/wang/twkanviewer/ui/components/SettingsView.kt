@@ -14,7 +14,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.BottomAppBar
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -22,21 +25,29 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.wang.twkanviewer.BuildConfig
+import com.wang.twkanviewer.GitHubRelease
 import com.wang.twkanviewer.R
+import com.wang.twkanviewer.UpdateManager
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -55,6 +66,13 @@ fun SettingsView(
 ) {
     var fontDropdownExpanded by remember { mutableStateOf(false) }
     val fontOptions = listOf("Default", "Serif", "Sans Serif", "Monospace")
+    
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val updateManager = remember { UpdateManager(context) }
+    var isCheckingUpdates by remember { mutableStateOf(false) }
+    var updateRelease by remember { mutableStateOf<GitHubRelease?>(null) }
+    var showNoUpdateDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         bottomBar = {
@@ -74,7 +92,7 @@ fun SettingsView(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.Top
         ) {
-            // "Settings" title at the top of the content area with minimal top padding
+            // "Settings" title
             Text(
                 stringResource(R.string.settings_title),
                 style = MaterialTheme.typography.headlineLarge,
@@ -152,7 +170,7 @@ fun SettingsView(
                             .fillMaxWidth()
                             .padding(top = 8.dp)
                             .clickable { fontDropdownExpanded = true },
-                        enabled = false, // Disable to handle clicks via Box or Modifier.clickable
+                        enabled = false,
                         colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
                             disabledTextColor = MaterialTheme.colorScheme.onSurface,
                             disabledBorderColor = MaterialTheme.colorScheme.outline,
@@ -161,12 +179,7 @@ fun SettingsView(
                         )
                     )
                 }
-                // Overlay for clicking since OutlinedTextField is disabled
-                Box(
-                    modifier = Modifier
-                        .matchParentSize()
-                        .clickable { fontDropdownExpanded = true }
-                )
+                Box(modifier = Modifier.matchParentSize().clickable { fontDropdownExpanded = true })
                 
                 DropdownMenu(
                     expanded = fontDropdownExpanded,
@@ -185,7 +198,79 @@ fun SettingsView(
                 }
             }
 
-            Spacer(modifier = Modifier.height(32.dp)) // Extra space at bottom
+            HorizontalDivider(modifier = Modifier.padding(vertical = 24.dp))
+
+            // Update Section
+            Text(stringResource(R.string.about_section), style = MaterialTheme.typography.titleMedium)
+            
+            Column(modifier = Modifier.padding(top = 16.dp)) {
+                Text(stringResource(R.string.version_label, BuildConfig.VERSION_NAME), style = MaterialTheme.typography.bodyLarge)
+                
+                OutlinedButton(
+                    onClick = {
+                        scope.launch {
+                            isCheckingUpdates = true
+                            val release = updateManager.checkForUpdates(
+                                BuildConfig.GITHUB_OWNER,
+                                BuildConfig.GITHUB_REPO,
+                                BuildConfig.VERSION_NAME
+                            )
+                            isCheckingUpdates = false
+                            if (release != null) {
+                                updateRelease = release
+                            } else {
+                                showNoUpdateDialog = true
+                            }
+                        }
+                    },
+                    modifier = Modifier.padding(top = 8.dp),
+                    enabled = !isCheckingUpdates
+                ) {
+                    if (isCheckingUpdates) {
+                        CircularProgressIndicator(modifier = Modifier.padding(end = 8.dp).height(16.dp), strokeWidth = 2.dp)
+                        Text(stringResource(R.string.checking_updates))
+                    } else {
+                        Text(stringResource(R.string.check_updates_button))
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(32.dp))
         }
+    }
+
+    // Update Dialog
+    updateRelease?.let { release ->
+        AlertDialog(
+            onDismissRequest = { updateRelease = null },
+            title = { Text(stringResource(R.string.update_found_title)) },
+            text = { Text(stringResource(R.string.update_found_message, release.tag_name)) },
+            confirmButton = {
+                Button(onClick = {
+                    updateManager.downloadAndInstall(release)
+                    updateRelease = null
+                }) {
+                    Text(stringResource(R.string.update_button))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { updateRelease = null }) {
+                    Text(stringResource(R.string.cancel_button))
+                }
+            }
+        )
+    }
+
+    // No Update Dialog
+    if (showNoUpdateDialog) {
+        AlertDialog(
+            onDismissRequest = { showNoUpdateDialog = false },
+            confirmButton = {
+                TextButton(onClick = { showNoUpdateDialog = false }) {
+                    Text("OK")
+                }
+            },
+            text = { Text(stringResource(R.string.no_updates_found)) }
+        )
     }
 }
