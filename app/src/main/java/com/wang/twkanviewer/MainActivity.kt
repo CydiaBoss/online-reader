@@ -1005,14 +1005,14 @@ class MainActivity : ComponentActivity() {
                         showTopBar = true
                         val targetState = when(currentViewState) {
                             ViewState.BROWSER -> null
-                            ViewState.STORY -> ViewState.BROWSER
+                            ViewState.SETTINGS -> ViewState.BROWSER
+                            ViewState.STORY_LIST -> ViewState.BROWSER
+                            ViewState.STORY -> if (isCurrentStorySaved) ViewState.STORY_LIST else ViewState.BROWSER
                             ViewState.CHAPTER_LIST -> ViewState.STORY
                             ViewState.CHAPTER -> ViewState.CHAPTER_LIST
-                            ViewState.STORY_LIST -> ViewState.BROWSER
-                            ViewState.SETTINGS -> ViewState.BROWSER
                         }
 
-                        if (targetState == ViewState.BROWSER && !isCurrentStorySaved && currentStory != null) {
+                        if (currentViewState == ViewState.STORY && !isCurrentStorySaved && currentStory != null) {
                             nextViewStateAfterPrompt = ViewState.BROWSER
                             showExitPrompt = true
                         } else if (targetState != null) {
